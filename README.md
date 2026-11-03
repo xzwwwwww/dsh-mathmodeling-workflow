@@ -8,6 +8,20 @@
 
 需要 DSH（桌面版 / Web 版均可）。可选依赖按需装：Python 3.10+（要能 `import matplotlib`）、XeLaTeX（出 PDF）、Chromium 浏览器（仅 `flowchart_engine=html` 用）。缺哪个，对应那一步会报错，其余步骤照常跑。
 
+### 方式一：npx 直接装（不用 clone）
+
+```bash
+npx -y @deepseek-ai/dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmodeling-workflow
+```
+
+一条命令完成：拉取仓库 → 装进 `desktop` profile → 自动注册进 bundle 列表。Web 版把 `desktop` 换成 `web`。
+
+- 需要本机有 Node.js 和 pnpm（DSH 桌面版自带 pnpm；纯 Node 环境先 `npm i -g pnpm`）。
+- 仓库是私有的，所以要有访问权限；没有权限就先 clone，再用方式二。
+- 已经装过本地链接版时，先移除再加，否则 Windows 上 pnpm 会报 `EPERM`。
+
+### 方式二：从本地目录装
+
 ```bash
 git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 ```
@@ -17,7 +31,7 @@ git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 - **桌面端**：插件管理 → 安装 bundle → 目标填克隆下来的目录
 - **Agent**：`plugin_manager({ action: "install_bundle", target: "<克隆目录的绝对路径>" })`
 
-返回 `application: applied` 即生效。之后更新用 `git pull`，把插件关闭再启用一次（或重启 DSH）；只改 `assets/` 的话下次 `modeling_init` 自动生效。卸载：`plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
+更新：方式一重跑 npx 命令；方式二 `git pull` 后把插件关闭再启用一次（或重启 DSH）。只改 `assets/` 的话下次 `modeling_init` 自动生效。卸载：`plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
 
 装好直接说：
 
