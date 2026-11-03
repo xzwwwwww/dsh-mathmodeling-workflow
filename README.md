@@ -6,87 +6,22 @@
 
 ## 安装
 
-### 1. 前置条件
+需要 DSH（桌面版 / Web 版均可）。可选依赖按需装：Python 3.10+（要能 `import matplotlib`）、XeLaTeX（出 PDF）、Chromium 浏览器（仅 `flowchart_engine=html` 用）。缺哪个，对应那一步会报错，其余步骤照常跑。
 
-| 依赖 | 是否必需 | 说明 |
-|---|---|---|
-| DSH（DeepSeek Harness） | 必需 | 需要 `plugin_manager` 与工具注册能力；桌面版/Web 版均可 |
-| Python 3.10+（含 numpy / pandas / matplotlib） | 数据图、数据核对步需要 | 必须是**能 `import matplotlib`** 的解释器；PATH 里的 python 不一定合格 |
-| XeLaTeX（TeX Live / MiKTeX） | 论文编译步需要 | 没有就只能到 `paper/main.tex`，出不了 PDF |
-| Chromium 内核浏览器（Edge / Chrome / Chromium） | `flowchart_engine=html` 需要 | 找不到时可用环境变量 `MMW_BROWSER` 指定可执行文件；用 `drawio` 则不需要 |
-| 中文字体（simsun / simkai 等） | 编译中文模板需要 | 初始化时会尝试从 `<系统盘>\Windows\Fonts` 回填，结果见 `_templates/FONTS_MISSING.md` |
-| Node.js | 只跑自测时需要 | `node test/smoke.mjs` |
-
-### 2. 安装插件
-
-**方式 A：从 GitHub 克隆后安装（推荐）**
-
-```powershell
+```bash
 git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 ```
 
-然后在 DSH 会话里让 agent 执行（`target` 传克隆目录的**绝对路径**）：
+装进当前 profile（二选一）：
 
-```
-plugin_manager install_bundle(target="D:\path\to\dsh-mathmodeling-workflow")
-```
+- **桌面端**：插件管理 → 安装 bundle → 目标填克隆下来的目录
+- **Agent**：`plugin_manager({ action: "install_bundle", target: "<克隆目录的绝对路径>" })`
 
-**方式 B：直接从本地目录开发安装**
+返回 `application: applied` 即生效。之后更新用 `git pull`，把插件关闭再启用一次（或重启 DSH）；只改 `assets/` 的话下次 `modeling_init` 自动生效。卸载：`plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
 
-```
-plugin_manager install_bundle(target="D:\dsh-plugins\dsh-mathmodeling-workflow")
-```
+装好直接说：
 
-安装成功后返回里应看到 `"application": "applied"`；包名为 `@local/dsh-mathmodeling-workflow`，Loader 行 id 为 `mathmodeling-workflow`。插件以**本地目录链接**方式安装，改代码不用重装。
-
-> 仓库当前为私有；克隆前需要你有访问权限，或先在 GitHub 上改为 public。
-
-### 3. 首次运行
-
-```
-modeling_init(input_dir="<赛题目录>", competition="cumcm", problem_id="A", max_pages=25)
-modeling_next(workspace="modeling-<目录名>-<时间戳>")
-```
-
-`modeling_init` 会在**当前会话工作目录**下建 workspace（CLAUDE.md / skills / _utils / _templates / user_data / `.mmw/state.json`），并回显 8 步清单；随后按「用法」循环派子代理、逐步验收。插件还会注册一段 system prompt 协议，agent 会自动按这个流程走。
-
-### 4. 更新 / 重载 / 卸载
-
-```powershell
-cd D:\dsh-plugins\dsh-mathmodeling-workflow
-git pull
-```
-
-- 改 `assets/`（技能、脚本、模板、KaTeX）：**下次 `modeling_init` 立即生效**，不用重载。
-- 改 `lib/*.js`、`index.js`、`package.json`：必须重载插件或重启 DSH：
-
-```
-plugin_manager set_plugin(target="include:mathmodeling-workflow", enabled=false)
-plugin_manager set_plugin(target="include:mathmodeling-workflow", enabled=true)
-```
-
-- 卸载：
-
-```
-plugin_manager remove_bundle(target="@local/dsh-mathmodeling-workflow")
-```
-
-### 5. 自检
-
-```bash
-node test/smoke.mjs    # 期望最后一行 ALL PASS
-```
-
-### 6. 常见问题
-
-| 现象 | 处理 |
-|---|---|
-| 图表/编程步报 `No module named 'matplotlib'` | PATH 里的 python 不合格 → 用绝对路径的 Python 3.10+ 解释器，或设 `MMW_PYTHON` 指向它 |
-| 编译步报 `xelatex: command not found` | 安装 TeX Live / MiKTeX 并把它加进 PATH |
-| `flowchart_engine=html` 报找不到浏览器 | 装 Edge / Chrome / Chromium，或用 `MMW_BROWSER` 指定路径；也可改用 `drawio` |
-| 编译报缺字体 | 看 `_templates/FONTS_MISSING.md`，把字体文件放进对应模板目录后重编 |
-| 安装后工具表里没有 `modeling_*` | 确认 `install_bundle` 返回 `application: applied`；否则重启 DSH 再看 |
-| 工作区里 `PROBLEM_ANALYSIS.md` 缺失但子代理说做完了 | 调 `modeling_finish` 让闸门判定，按返回的 hints 重派 |
+> 用建模插件跑这个赛题：`D:\path\to\赛题目录`（国赛 A 题，正文 25 页）
 
 ## 技能目录（中文命名）
 
