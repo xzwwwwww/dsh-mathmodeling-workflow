@@ -1,0 +1,4 @@
+- insert:
+    - id: mathmodeling-workflow
+      name: '@local/dsh-mathmodeling-workflow'
+      config: {}

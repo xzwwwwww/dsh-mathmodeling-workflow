@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Math Modeling Competition Workflow",
+    "description": "Scaffolds a workspace and CLAUDE.md from a problem folder, dispatches one subagent per pipeline step (analysis → modeling → code → figures → paper → compile), and verifies each step with deterministic gates."
+  }
+}

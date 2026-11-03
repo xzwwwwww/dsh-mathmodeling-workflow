@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Math modeling workflow">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0F2A4A"/>
+  <g stroke="#3E6FA3" stroke-width="1.6" fill="none" opacity="0.85">
+    <path d="M14 48V16"/>
+    <path d="M14 48H52"/>
+    <path d="M14 40h38M14 32h38M14 24h38" stroke-dasharray="2 4" opacity="0.5"/>
+  </g>
+  <path d="M16 42c6-1 8-9 13-11s8 5 13-3 6-9 9-10" fill="none" stroke="#8FD3FF" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="29" cy="31" r="3" fill="#FFD166"/>
+  <circle cx="42" cy="28" r="3" fill="#FFD166"/>
+  <g fill="#8FD3FF">
+    <rect x="46" y="50" width="6" height="4" rx="1"/>
+    <rect x="38" y="50" width="6" height="4" rx="1" opacity="0.7"/>
+    <rect x="30" y="50" width="6" height="4" rx="1" opacity="0.45"/>
+  </g>
+</svg>
