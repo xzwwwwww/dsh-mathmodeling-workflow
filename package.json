@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-mathmodeling-workflow",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "description": "数学建模竞赛工作流插件：扫描赛题文件夹、生成 workspace + CLAUDE.md、逐步派发子代理、闸门验收",

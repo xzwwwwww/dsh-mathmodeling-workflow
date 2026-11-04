@@ -1,0 +1,5 @@
+{
+  "_说明": "概念图（GPT_image）配置。填 api_key：第三方中转站或官方 key；base_url 留空则用官方 https://api.openai.com/v1，用中转站就填中转站地址。没配置也能跑，只是规划里的概念图会被自动跳过。",
+  "api_key": "",
+  "base_url": ""
+}

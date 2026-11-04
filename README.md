@@ -145,16 +145,22 @@ agent 会回显类似：
 
 数据图和流程图都是**全本地**的（matplotlib / 本机浏览器渲染），不需要任何 key。
 
-只有「概念图 / 场景图」这类需要图像模型，插件自带 `_utils/gpt_image.py`，用两个环境变量：
+只有「概念图 / 场景图」这类需要图像模型。工作区里**已经带了配置文件**，直接打开填：
 
-```bash
-GPT_IMAGE_API_KEY   # 你的 key
-GPT_IMAGE_BASE_URL  # 接口地址，默认 https://api.openai.com/v1
+```text
+<workspace>/_utils/_gpt_image_config.json
 ```
 
-第三方 key 和地址请到你用的中转站/服务商自行获取与配置。
+```json
+{
+  "api_key": "",
+  "base_url": ""
+}
+```
 
-- 也可以写在 `_utils/_gpt_image_config.json`；
+- `api_key`：你从**中转站或官方**拿到的 key；
+- `base_url`：中转站给接口地址就填（例如 `https://xxx.com/v1`），**留空则用官方** `https://api.openai.com/v1`；
+- 也可以不改文件，直接设环境变量 `GPT_IMAGE_API_KEY` / `GPT_IMAGE_BASE_URL`（环境变量优先级更高）；
 - 检查是否配好：`python _utils/gpt_image.py --check`；
 - **没配也能跑**：规划里的概念图会被自动跳过，不影响其余步骤。
 

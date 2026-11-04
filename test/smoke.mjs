@@ -68,7 +68,7 @@ async function main() {
   const workspace = path.join(TMP, 'ws');
   const { state } = await scaffoldWorkspace({ workspaceDir: workspace, assetsDir: ASSETS, inputFiles: files, switches, steps, title: '国赛 A题 - 调度优化' });
 
-  for (const rel of ['CLAUDE.md', '.env_skill', '_utils/plot_utils.py', '_utils/screenshot_capture.py', '_utils/katex/katex.min.js', '_utils/paper_data_check.py', '_templates/cumcm/main.tex', 'skills/赛题分析/SKILL.md', 'skills/编程实现/references/checks/sanity_check.md', 'skills/论文撰写/templates/cumcm/main.tex', 'user_data/赛题A.md']) {
+  for (const rel of ['CLAUDE.md', '.env_skill', '_utils/plot_utils.py', '_utils/screenshot_capture.py', '_utils/katex/katex.min.js', '_utils/paper_data_check.py', '_utils/_gpt_image_config.json', '_templates/cumcm/main.tex', 'skills/赛题分析/SKILL.md', 'skills/编程实现/references/checks/sanity_check.md', 'skills/论文撰写/templates/cumcm/main.tex', 'user_data/赛题A.md']) {
     check(`生成 ${rel}`, existsSync(path.join(workspace, rel)));
   }
   const cm = await readFile(path.join(workspace, 'CLAUDE.md'), 'utf8');
