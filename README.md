@@ -126,16 +126,16 @@ agent 会回显类似：
 
 ## 整个流程
 
-| # | 步骤 | 干什么 | 主产物 |
-|---|---|---|---|
-| 01 | 赛题分析 | 拆子问题、定义变量、规划建模思路和图表清单 | `PROBLEM_ANALYSIS.md` |
-| 02 | 建模求解 | 假设、模型建立、求解、检验、逻辑合同 | `MODELING_REPORT.md` |
-| 03 | 编程实现 | 写可运行代码、跑出结果、生成结果 JSON | `RESULTS.md` + `code/` |
-| 04 | 图表生成 | 数据图（matplotlib，按 manifest 对账） | `figures/fig_*.pdf` + `latex_includes.tex` |
-| 05 | 流程图/架构图 | DrawIO 或 HTML 引擎画流程、架构、TikZ 图 | `figures/fig_*` |
-| 06 | 逻辑对抗复核 | 六类逻辑缺口复核（方向反、跨问矛盾、任务读歪…） | `COMP_REVIEW_VERDICT.json` |
-| 07 | 论文撰写 | LaTeX 正文、摘要、图表嵌入、引用；strict 时做数据真实性核对 | `paper/main.tex` |
-| 08 | 编译与合规检查 | XeLaTeX 编译、模板完整性、图嵌入、AI 声明合规 | `paper/main.pdf` |
+| # | 步骤 | 干什么 |
+|---|---|---|
+| 01 | 赛题分析 | 拆子问题、定义变量、规划建模思路和图表清单 |
+| 02 | 建模求解 | 假设、模型建立、求解、检验、逻辑合同 |
+| 03 | 编程实现 | 写可运行代码、跑出结果、生成结果 JSON |
+| 04 | 图表生成 | 数据图（matplotlib，按 manifest 对账） |
+| 05 | 流程图/架构图 | DrawIO 或 HTML 引擎画流程、架构、TikZ 图 |
+| 06 | 逻辑对抗复核 | 六类逻辑缺口复核（方向反、跨问矛盾、任务读歪…） |
+| 07 | 论文撰写 | LaTeX 正文、摘要、图表嵌入、引用；strict 时做数据真实性核对 |
+| 08 | 编译与合规检查 | XeLaTeX 编译、模板完整性、图嵌入、AI 声明合规 |
 
 可调整：`flowchart_engine=html` 会把第 05 步换成 HTML 引擎技能；`skip_figures` 去掉 04+05；`enable_comp_review=false` 去掉 06；`fast` 模式跳过 06 的深度复核和数据核对。
 
