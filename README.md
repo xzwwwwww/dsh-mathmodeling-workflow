@@ -1,24 +1,31 @@
 # dsh-mathmodeling-workflow
 
-把「数学建模竞赛全流程」做成 DSH 插件：**扫描赛题目录 → 建 workspace + CLAUDE.md → 逐步派发子代理 → 确定性闸门验收**。
+给 [DSH](https://github.com/deepseek-ai/deepseek-harness) 用的**数学建模竞赛全流程插件**：把赛题和数据放进一个文件夹，说一句话，它就会按 8 个步骤跑完——赛题分析、建模求解、编程实现、数据图、流程图、逻辑对抗复核、论文撰写、编译出 PDF。
 
-骨架是**状态机 + 技能规格 + 确定性闸门 + 共享记忆文件**（CLAUDE.md），不是「一条长 prompt」。技能与工具脚本随插件打包在 `assets/skills/`、`assets/utils/`，初始化时把**整个技能文件夹**（SKILL.md + references/ + templates/ + tools/）原样复制到工作区 `skills/`。
+```text
+赛题目录/ ──► 8 步流水线 ──► paper/main.pdf + 全部源码/图表/中间产物
+```
 
 ## 安装
 
-需要 DSH（桌面版 / Web 版均可）。可选依赖按需装：Python 3.10+（要能 `import matplotlib`）、XeLaTeX（出 PDF）、Chromium 浏览器（仅 `flowchart_engine=html` 用）。缺哪个，对应那一步会报错，其余步骤照常跑。
+前置：DSH（桌面版或 Web 版）。用 npx 方式装需要 Node.js + pnpm（DSH 桌面版自带 pnpm；纯 Node 环境先 `npm i -g pnpm`）。
 
-### 方式一：npx 直接装（不用 clone）
+其余依赖按需装，缺哪个只影响对应那一步：
+
+| 依赖 | 什么时候需要 |
+|---|---|
+| Python 3.10+（能 `import matplotlib`） | 数据图、结果核对 |
+| XeLaTeX（TeX Live / MiKTeX） | 编译论文 PDF |
+| Chromium 内核浏览器（Edge / Chrome） | 仅 `flowchart_engine=html` 时需要 |
+| 中文字体 | 编译中文模板（初始化时会尝试从系统字体回填） |
+
+### 方式一：npx 一条命令（推荐）
 
 ```bash
 npx -y @deepseek-ai/dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmodeling-workflow
 ```
 
-一条命令完成：拉取仓库 → 装进 `desktop` profile → 自动注册进 bundle 列表。Web 版把 `desktop` 换成 `web`。
-
-- 需要本机有 Node.js 和 pnpm（DSH 桌面版自带 pnpm；纯 Node 环境先 `npm i -g pnpm`）。
-- 仓库是私有的，所以要有访问权限；没有权限就先 clone，再用方式二。
-- 已经装过本地链接版时，先移除再加，否则 Windows 上 pnpm 会报 `EPERM`。
+拉取仓库 → 装进 `desktop` profile → 自动注册进 bundle 列表。Web 版把 `desktop` 换成 `web`。
 
 ### 方式二：从本地目录装
 
@@ -26,158 +33,139 @@ npx -y @deepseek-ai/dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmod
 git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 ```
 
-装进当前 profile（二选一）：
+然后在 DSH 里二选一：
 
 - **桌面端**：插件管理 → 安装 bundle → 目标填克隆下来的目录
 - **Agent**：`plugin_manager({ action: "install_bundle", target: "<克隆目录的绝对路径>" })`
 
-更新：方式一重跑 npx 命令；方式二 `git pull` 后把插件关闭再启用一次（或重启 DSH）。只改 `assets/` 的话下次 `modeling_init` 自动生效。卸载：`plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
+更新：方式一重跑 npx 命令；方式二 `git pull` 后把插件关闭再启用一次（或重启 DSH）。
+卸载：插件管理里移除，或 `plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
 
-装好直接说：
+## 使用
 
-> 用建模插件跑这个赛题：`D:\path\to\赛题目录`（国赛 A 题，正文 25 页）
+### 1. 把赛题和数据放进一个文件夹
 
-## 技能目录（中文命名）
-
-`assets/skills/` 下按中文命名，初始化时整包复制到工作区 `skills/`：
-
-| 技能目录 | 用途 | 对应步骤 key |
-|---|---|---|
-| `赛题分析` | 拆题、子问题、变量、图表预规划 | `comp-prob-analysis` |
-| `建模求解` | 模型假设/建立/检验、逻辑合同 | `comp-modeling` |
-| `编程实现` | 代码实现、结果 JSON、能力验收 | `comp-code` |
-| `图表生成` | 数据图（`figure_style=default` 时使用） | `paper-figure` |
-| `自然风格图表` | 数据图（`figure_style=nature` 时替换上一步技能；Nature 排版 + `nature_palette()` 取色） | `paper-figure` |
-| `流程图绘制` | DrawIO 流程图/架构图（可拖拽编辑） | `paper-figure-drawio` |
-| `流程图绘制HTML` | HTML+截图流程图（`flowchart_engine=html` 时替换上一步） | `paper-figure-html` |
-| `逻辑对抗复核` | 六类逻辑缺口复核（默认开） | `comp-review` |
-| `论文撰写` | 竞赛论文 LaTeX 写作 + 严格模式数据核对 | `comp-paper-zh` |
-| `编译与合规` | 编译、模板完整性、图嵌入、合规检查 | `comp-compile-zh` |
-
-> 步骤 `key` 与状态文件仍用 ASCII（`comp-paper-zh` 等），只有**技能目录名**是中文：闸门、`state.json`、prompt 标记（`MMW_STEP_DONE <key>`）都不受改名影响。
-
-## 用法（主代理视角）
-
-1. 用户在任意目录准备一个文件夹：赛题 PDF/DOCX、数据（csv/xlsx）、自定义要求（md/txt）。
-2. 调 `modeling_init`：
-   - `input_dir`：上述文件夹
-   - 开关：`competition`（cumcm/wuyi/huazhong/apmcm_zh/diangong/mathorcup/zhongqing/yangtze/liaoning/huashu/huawei/generic）、`problem_id`、`max_pages`、`figure_style`、`flowchart_engine`、`diagram_style`、`rich_mode`、`validation_mode`、`ai_disclosure`、`enable_comp_review`、`custom_requirements`…
-3. 循环 `modeling_next` → `subagent` → `modeling_finish`，每步一个子代理，串行执行。
-4. 全部完成后 `modeling_status` 查看产物（最终 `paper/main.pdf`）。
-
-工作流生成在**当前会话工作目录**下：`modeling-<赛题目录名>-<时间戳>/`。默认 8 步（含逻辑对抗复核）；一个工作区约 20 MB（`_templates` 只回填当前赛项的字体）。
-
-### `max_pages` 指**正文页数**
-
-口径和用户约定一致：
-
-- **有目录**：目录之后 → 参考文献之前；
-- **无目录**：摘要之后 → 参考文献之前；
-- **不含**摘要、目录、参考文献、附录（含附录代码）。
-
-竞赛规则里若有「总页数上限（含附录/参考文献）」，那是另一个约束，两个要同时满足；页数闸门只按上面的正文口径判定（`paper/sections/` 里附录类文件 `A_*` / `Z_*` / 含 `\appendix` 的会被排除）。
-
-## 工具
-
-| 工具 | 作用 |
-|------|------|
-| `modeling_init` | 扫描目录、解析开关与步骤、建工作区（CLAUDE.md / .env_skill / _utils / _references / _templates / **skills（整包）** / user_data / .mmw/state.json） |
-| `modeling_next` | 渲染当前步骤 `_steps/NN_<step>/prompt.md`（内联技能规格、参数、上游产物、产物契约），返回 prompt 路径与可直接交给 `subagent` 的文本 |
-| `modeling_finish` | 跑闸门（artifact / companions / figures / pages / logic / review_verdict / ai_disclosure / paper_data_check），通过则推进，失败返回修复 hints |
-| `modeling_status` | 进度表 + 产物大小 + 开关快照 |
-| `modeling_switches` | 流程开始前改开关（会重新解析步骤并重写 CLAUDE.md） |
-| `modeling_ask` | 子代理用：登记一个必须由用户决定的问题，然后结束本轮等待 |
-| `modeling_pending` | 主代理用：列出待回答的问题（含可选答案） |
-| `modeling_answer` | 主代理用：记录用户回答，返回要 send_message 给子代理的文本 |
-
-## 开关语义
-
-- `figure_style`：**决定数据图用哪个技能**——`default` 用 `图表生成`（按工作区种子随机配色、去指纹）；`nature` 用 `自然风格图表`（Nature 排版：左下两边框、刻度朝外、无网格、8pt 字级；取色调 `nature_palette()`，marker 用 `nature_markers()`）。两者产物契约相同（`fig_*.pdf` + `figures/latex_includes.tex`），步骤数量不变。
-- `flowchart_engine`：`drawio`（产物可拖拽编辑）/ `html`（布局更好但不可拖拽）。**会替换流程图那一步的技能**，但两者产物契约一致（`fig_*.pdf` + `latex_includes.tex`）。
-- `diagram_style`：`mono`/`plain`/`modern`，仅 html 引擎生效。
-- `rich_mode`：正文 40-60 页、30+ 图、摘要 1500-2200 字、12 类章节扩展；自动把页数抬到 ≥50，以条款形式注入 CLAUDE.md。
-- `validation_mode`：
-  - `strict`（默认）：论文步结束前，在**同一个子代理会话**里继续做「论文数据真实性核对」（见下）。
-  - `fast`：CLAUDE.md 写 `MMW_FAST_MODE=1`，技能跳过对抗复核与深度自修，数据核对闸门也跳过。
-- `ai_disclosure`：`off`（默认，且**必须无残留**）/ `none`（一句话声明）/ `used`（声明章节 + 附录四表 + 参考文献 AI 条目）。
-- `enable_comp_review`：插入「逻辑对抗复核」步，**默认开**，位置在**图表之后、论文之前**（它要复核图表并触发重画）；传 `false` 可省一次子代理调用。
-
-## 子代理提问：`modeling_ask` → 用户 → 回传
-
-子代理不是「闷头猜」：信息不足时分两档处理（prompt 与 CLAUDE.md 都写了规则）：
-
-| 情况 | 行为 |
-|---|---|
-| 能安全假设 | 直接做，在产物里写「假设：…；依据：…」，不打断流程 |
-| 猜错会做错方向（题号/竞赛口径、输出格式、数据取舍、硬性页数上限、自定义要求含义等） | 调 `modeling_ask(workspace, question, options?)` 登记问题 → **结束本轮** |
-
-主代理接力的固定四步：
-
-```
-modeling_pending            # 看到 [q1] 问题 + 可选答案
-→ ask_user_question         # 问用户（原样问，别改写）
-→ modeling_answer           # 记录回答，返回要回传的文本
-→ send_message(子代理, 回传文本)   # 同一子代理继续本步
-→ modeling_finish           # 再验产物
+```text
+2026国赛A/
+├─ 赛题A.docx          # 赛题原文：PDF / DOCX / MD 都行
+├─ 数据.csv            # 附件数据：csv / xlsx / json
+└─ 自定义要求.md        # 可选：导师规范、评审偏好、必须包含的内容
 ```
 
-闸门保护：有未回答问题或步骤处于 `waiting` 时，`modeling_finish` 会拒绝验收并提示先处理问题；`modeling_next` 也会返回「正在等回答」而不是把下一步渲染出来。问题与回答都落在 `.mmw/state.json` 的 `questions[]`，可追溯、可重放。
+### 2. 在 DSH 里说一句话
 
-## 严格模式：论文步内的数据真实性核对
+```
+用建模插件跑这个赛题：D:\2026国赛A
+```
 
-论文正文写完后，**同一个子代理不换会话**，继续执行 `_utils/paper_data_check.py`：
+插件会让 agent 先确认开关（没填的用默认值并回显），再建工作区、开始逐步推进。
+
+### 3. 提示词怎么写
+
+**最简**（全部默认）：
+
+```
+用建模插件跑这个赛题：D:\2026国赛A
+```
+
+**带要求**（只写你在意的，其余默认）：
+
+```
+用建模插件跑：D:\2026国赛A，国赛 A 题，正文 25 页，
+数据图用 nature 风格，流程图用 HTML 引擎，严格审查
+```
+
+agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国赛A-<时间戳>/`。
+
+### 4. 开关一览（19 个）
+
+| 开关 | 取值 | 默认 | 用途 |
+|---|---|---|---|
+| `competition` | cumcm / wuyi / huazhong / apmcm_zh / diangong / mathorcup / zhongqing / yangtze / liaoning / huashu / huawei / generic | `cumcm` | 赛项：决定竞赛规则、默认页数、LaTeX 模板 |
+| `problem_id` | A/B/C… | 空 | 题号，写进参数和规则段 |
+| `title` | 任意字符串 | 空（取目录名） | 论文标题 / 赛题简称 |
+| `max_pages` | 正整数 | 赛项默认（多数 30，`apmcm_zh` 25） | **正文页数目标（下限）**：目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文上限 |
+| `figure_style` | `default` / `nature` | `default` | 数据图风格：default=按工作区随机配色（去指纹）；nature=Nature 排版+深蓝主色 |
+| `flowchart_engine` | `drawio` / `html` | `drawio` | 流程图引擎：drawio 产物可拖拽编辑；html 布局更好、不可拖拽 |
+| `diagram_style` | `mono` / `plain` / `modern` | `mono` | 流程图版式，仅 html 引擎生效 |
+| `rich_mode` | true / false | `false` | 丰满模式：正文 40-60 页、30+ 图、摘要 1500-2200 字、12 类章节扩展 |
+| `validation_mode` | `strict` / `fast` | `strict` | strict=完整审查（含论文数据真实性核对）；fast=省额度，跳过复核和深度自修 |
+| `enable_comp_review` | true / false | `true` | 是否插入「逻辑对抗复核」步（图表之后、论文之前），关掉省一次子代理调用 |
+| `ai_disclosure` | `off` / `none` / `used` | `off` | AI 声明：off 不写且不许残留；none 一句话；used 声明章节+附录四表 |
+| `comp_date_start` / `comp_date_end` | `YYYY-MM-DD` | 空 | 仅 `ai_disclosure=used` 用于生成比赛期内的交互日期 |
+| `skip_figures` | true / false | `false` | 跳过两个图表步 |
+| `skip_drawio` | true / false | `false` | 只跳过流程图步 |
+| `min_figures` / `min_tables` / `min_models` | 整数 或 `auto` | `auto` | 数量下限参考，写进 CLAUDE.md 供技能自检 |
+| `custom_requirements` | 自由文本 | 空 | 自定义要求（导师规范、必须包含的内容），最高优先级，会进 CLAUDE.md |
+
+另外 3 个不是开关的初始化参数：`input_dir`（必填，赛题目录）、`workspace_name`（工作区目录名，默认按目录名+时间戳）、`overwrite`（工作区已存在时是否重建）。
+
+### 5. 一个完整示例
+
+```
+用建模插件跑：D:\2026国赛A，国赛 A 题，正文 25 页，
+数据图用 nature 风格，流程图用 HTML 引擎（modern 版式），
+AI 声明按"使用过 AI 工具"写，开启逻辑对抗复核，
+自定义要求：摘要不超过一页，必须包含灵敏度分析。
+```
+
+agent 会回显类似：
+
+```
+赛项：国赛 (CUMCM)(cumcm) ｜ 题号=A ｜ 页数(正文)=25 ｜ 数据图风格=nature
+流程图=html/modern ｜ 丰满模式=关 ｜ 审查=strict ｜ AI声明=used ｜ 对抗复核=开
+→ 8 步，工作区 modeling-2026国赛A-20261104-2030/
+```
+
+### 6. 跑起来之后
+
+- **每步一个子代理、串行执行**：上一步闸门通过才进下一步，主会话只做调度和验收。
+- **需要你拍板时会来问你**：子代理拿不准关键信息（题号口径、数据取舍、硬性要求）会先问你，拿到回答再继续；能靠合理假设推进的，它会在产物里写明假设。
+- **随时可以问进度**：`看下当前进度` → 会列出 8 步状态、产物大小和待答问题。
+- **产物**：工作区根目录有 `PROBLEM_ANALYSIS.md`、`MODELING_REPORT.md`、`RESULTS.md`、`code/`、`figures/`、`paper/main.pdf`。
+
+## 整个流程
+
+| # | 步骤 | 干什么 | 主产物 |
+|---|---|---|---|
+| 01 | 赛题分析 | 拆子问题、定义变量、规划建模思路和图表清单 | `PROBLEM_ANALYSIS.md` |
+| 02 | 建模求解 | 假设、模型建立、求解、检验、逻辑合同 | `MODELING_REPORT.md` |
+| 03 | 编程实现 | 写可运行代码、跑出结果、生成结果 JSON | `RESULTS.md` + `code/` |
+| 04 | 图表生成 | 数据图（matplotlib，按 manifest 对账） | `figures/fig_*.pdf` + `latex_includes.tex` |
+| 05 | 流程图/架构图 | DrawIO 或 HTML 引擎画流程、架构、TikZ 图 | `figures/fig_*` |
+| 06 | 逻辑对抗复核 | 六类逻辑缺口复核（方向反、跨问矛盾、任务读歪…） | `COMP_REVIEW_VERDICT.json` |
+| 07 | 论文撰写 | LaTeX 正文、摘要、图表嵌入、引用；strict 时做数据真实性核对 | `paper/main.tex` |
+| 08 | 编译与合规检查 | XeLaTeX 编译、模板完整性、图嵌入、AI 声明合规 | `paper/main.pdf` |
+
+可调整：`flowchart_engine=html` 会把第 05 步换成 HTML 引擎技能；`skip_figures` 去掉 04+05；`enable_comp_review=false` 去掉 06；`fast` 模式跳过 06 的深度复核和数据核对。
+
+每一步结束都由**确定性闸门**验收（产物存在、图表对账、正文页数、逻辑合同、AI 声明、数据核对），不通过就带着修复提示重派，最多重试 2 次。
+
+## 生成概念图（可选）
+
+数据图和流程图都是**全本地**的（matplotlib / 本机浏览器渲染），不需要任何 key。
+
+只有「概念图 / 场景图」这类需要图像模型，插件自带 `_utils/gpt_image.py`，用两个环境变量：
 
 ```bash
-python _utils/paper_data_check.py --mode pdf    # Word/Markdown 用 --mode docx
+GPT_IMAGE_API_KEY   # 你的 key
+GPT_IMAGE_BASE_URL  # 接口地址，默认 https://api.openai.com/v1
 ```
 
-它做三件事：
+第三方 key 和地址请到你用的中转站/服务商自行获取与配置。
 
-1. 把 `figures/*.json` 里的真实数据拍平成数字清单；
-2. 扫论文正文（LaTeX 看 `paper/sections/*.tex`，Word 看 `paper/main.md`）里的「数据性数字」，逐个回到 JSON 找来源（小数位对齐 + 0.5% 相对容差，百分数自动换尺度；图/表/式编号、年份、公式内常数、文献数字会跳过）；
-3. 产出两份文件并给出结论：
-   - `PAPER_DATA_CHECKLIST.md`：数据原料表 + 自检步骤 + 「未对上」清单；
-   - `PAPER_DATA_CHECK_REPORT.md`：统计与结论（通过 / 未通过）。
+- 也可以写在 `_utils/_gpt_image_config.json`；
+- 检查是否配好：`python _utils/gpt_image.py --check`；
+- **没配也能跑**：规划里的概念图会被自动跳过，不影响其余步骤。
 
-全部对上时，脚本自动往 `paper/main.tex`（或 `paper/main.md`）写入 `DATA_CHECK_PASSED` 标记；对不上则列出行号与上下文，子代理必须逐个改数或改表述后重跑，直到通过。**禁止删表格/删结论来凑通过**；确属引用文献或题目给定常数的，要在报告末尾写「例外说明」。
-
-闸门 `paper_data_check` 的判据：两份 md 存在 + 报告结论为「通过」+ 通过标记在位；`fast` 模式自动跳过（code 2）。`python` 不可用时，prompt 允许退化为人工核对并写明确结论。
-
-## 闸门
-
-- `artifact`：主产物存在且 ≥ 最小体积（非 0 字节）。
-- `companions`：二级文件齐全（每个 > 50 字节，防空占位）。
-- `figures`：解析 `FIGURE_MANIFEST`（按粗体章节分类 DATA/TABLE/GPTIMG/DRAWIO/TIKZ），与实际 `figures/` 产出对账。**按步骤分开对账**：数据图步只管 DATA/GPTIMG，流程图步只管 DRAWIO/TIKZ；别的类别由另一步负责，不会互相卡住（`TABLE` 不是文件，不参与对账）。
-- `pages`：**正文页数**（目录后→参考文献前，无目录则摘要后→参考文献前；不含摘要/目录/参考文献/附录/AI 声明）。按 `paper/sections/` 正文 section 去 LaTeX 命令后 900 字/页估算，低于目标 80% 判失败；它是**目标/下限**，不是全文页数上限。
-- `logic`：读 `LOGIC_CONTRACT_MACHINE` + `CROSS_PROBLEM_LEDGER.json` + `figures/*.json`，核方向探针（**数值证伪**）、零裕度、等价声称、漏变量、跨问矛盾；合同缺失则跳过（不误杀）。
-- `review_verdict`：`COMP_REVIEW_VERDICT.json` 三类计数全 0 + findings 为空 + 账本存在。
-- `ai_disclosure`：三态 × LaTeX/docx，`off` 时反查残留。
-- `paper_data_check`：严格模式下的论文数据核对（见上）。
-
-## 已知限制
-
-- 只支持中文赛项（技能只打包了 `论文撰写` / `编译与合规` 两个中文写作链）。
-- 只支持 `output_format=pdf|latex`；`docx` 未打包 docx 技能（`paper_data_check.py` 支持 `--mode docx`，但写作步没有对应技能）。
-- 工具库只带 Python 源码，不带预编译 `.pyc`。
-- 模板包不含中文字体（体积太大）：初始化时从模板 `.cls/.tex` 解析字体文件名并尝试从系统字体目录（`%WINDIR%\Fonts`）补齐，结果写进 `_templates/FONTS_MISSING.md`（XeLaTeX 也能按字体名解析，缺文件不必然是硬错）。
-- `flowchart_engine=html` 的渲染管线**随包提供**：`_utils/screenshot_capture.py` + `_utils/katex/`（KaTeX，627 KB）。它调用本机已安装的 Chromium 内核浏览器（Edge / Chrome / Chromium）做无头渲染；找不到浏览器时可用环境变量 `MMW_BROWSER` 指定可执行文件路径。两者都没有就退回 `drawio`。
-- 子代理不能直接跟用户对话；需要用户拍板时会走 `modeling_ask` → 主代理 `ask_user_question` → 回传 的链路（见下节）。
-
-## 自测
+如果你自己有 ChatGPT 账号，也可以直接拉 Codex CLI，用它内置的 image gen 出图（本仓库的插件图标就是这么生成的）：
 
 ```bash
-node test/smoke.mjs
+codex exec -i 参考图.png "按这张参考图的角色生成一张方形应用图标，纯白背景、粗描边、无文字，保存为 icon.png"
 ```
 
-覆盖：开关规范化、步骤解析（html 替换 / 对抗复核插步 / skip_figures / nature 换技能）、目录扫描分类、workspace 生成（含 `_utils/screenshot_capture.py` 与 `_utils/katex/`）、CLAUDE.md 内容（丰满模式 / AI 标记 / 竞赛规则）、prompt 渲染（含严格模式数据核对任务）、闸门失败/通过/方向反/AI 残留、数据核对闸门四态。
+`codex` 不在 PATH 时，用 Codex 桌面版自带的那份：`%LOCALAPPDATA%\OpenAI\Codex\bin\<最新版本目录>\codex.exe`。
 
-HTML 出图链路（真实工作区实测）：
+## License
 
-```bash
-python _utils/screenshot_capture.py --geom-check figures/fig_flow.html --render-math   # 0=通过 1=有几何问题 2=无法检查
-python _utils/screenshot_capture.py --file figures/fig_flow.html --out figures/fig_flow.pdf --format pdf --render-math
-```
-
-实测：KaTeX 公式正常渲染、几何自检通过、PDF 单页且含字体对象（`html_pdf_check.py` 全绿）、页面尺寸与 HTML 内容一致（481×308 px → 362×233 pt）。
-
-> 插件以本地目录链接安装：改 `lib/*.js` 后需重启 DSH（或关闭再启用该插件）才加载新模块；`assets/` 是运行时读取，改完立即生效。
+MIT

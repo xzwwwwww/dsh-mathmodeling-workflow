@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- README 重写为面向使用者的文档：安装 → 使用（准备文件夹/提示词/19 个开关/完整示例/跑起来之后）→ 流程 → 概念图说明。
+- `figures` 闸门：未配置 `GPT_IMAGE_API_KEY` / `_gpt_image_config.json` 时，概念图自动跳过（不卡步），并在 detail 里记 `gptImgSkipped`。
+- 版本号 0.3.2。
 ## 0.3.1
 
 修两个真实跑流程时暴露的问题：

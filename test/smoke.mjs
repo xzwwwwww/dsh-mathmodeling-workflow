@@ -219,6 +219,8 @@ async function main() {
     '- fig_q2_cost',
     '**流程图**',
     '- fig_flow_q1',
+    '**概念图**',
+    '- fig_scene_q1',
     '**表格**',
     '- TABLE_q1',
     '<!-- END FIGURE_MANIFEST -->',
@@ -230,6 +232,9 @@ async function main() {
   check('数据图步只对账数据图（不等流程图）',
     gf1.ok === true && gf1.detail.planned === 2 && gf1.detail.deferred.FLOW === undefined && gf1.detail.byKind.DRAWIO === 1,
     JSON.stringify({ planned: gf1.detail.planned, deferred: gf1.detail.deferred }));
+  check('没配生图 key 时概念图自动跳过（不卡步）',
+    (gf1.detail.gptImgSkipped ?? []).includes('fig_scene_q1') && !gf1.detail.missing.includes('fig_scene_q1'),
+    JSON.stringify(gf1.detail.gptImgSkipped));
   const gf2 = await gateFigures(figWs, flowStep);
   check('流程图步只对账流程图（不重画数据图）',
     gf2.ok === false && gf2.detail.missing.includes('fig_flow_q1') && gf2.detail.deferred.DATA === 2,
