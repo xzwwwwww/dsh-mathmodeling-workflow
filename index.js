@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.3.0';
+const BUILD = '0.3.1';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -23,6 +23,7 @@ export const inject = ['tools', 'systemPrompt', 'workingDirectory'];
 const PROTOCOL = `## 数学建模竞赛工作流（mathmodeling-workflow 插件）
 当用户要求跑数学建模竞赛（国赛/美赛/五一杯/华中杯/亚太赛等），或提到"用建模插件/竞赛工作流/整套流程"，按下面协议执行：
 1. 先确认开关（缺项就用默认值并在回复里列出来）：竞赛 \`modeling_init\` 的 competition、题号、页数、figure_style、flowchart_engine、diagram_style、rich_mode、validation_mode、ai_disclosure、enable_comp_review、custom_requirements。
+   - **页数开关 \`max_pages\` 是「正文页数目标（下限）」**：目录之后 → 参考文献之前（无目录则摘要之后 → 参考文献之前），不含摘要/目录/参考文献/附录代码/AI 声明；**不是全文页数上限，也不是天花板**。转述给别人时原样带上这个口径，不要自己换算成"全文不超过 N 页"。
 2. 调 \`modeling_init\`（input_dir = 用户准备好的赛题目录）。它会扫描文件、建 workspace、写 CLAUDE.md、复制 _utils/_references/_templates/skills（技能整包）。**不要自己手写这些文件**。
 3. 循环：\`modeling_next\` 拿本步 prompt 文件 → 用 \`subagent\`（prompt 用返回的 subagent_prompt，cwd 用返回的 cwd）派发一个子代理 → 子代理结束后调 \`modeling_finish\` 验收。
 4. **子代理要提问时**：子代理自己会调 \`modeling_ask\`（或结束时告诉你它卡在哪），你收到后调 \`modeling_pending\` 取问题 → 用 \`ask_user_question\` 问用户 → 拿到回答后调 \`modeling_answer\` 记录 → 再 \`send_message\` 把「用户回答：…」发回同一个子代理让它继续，最后才 \`modeling_finish\`。不要替用户编答案。
@@ -98,7 +99,7 @@ export function apply(ctx, config = {}) {
         },
         problem_id: { type: 'string', description: '题号（A/B/C…），写进参数与竞赛规则' },
         title: { type: 'string', description: '论文标题/赛题简称，默认取赛题目录名' },
-        max_pages: { type: 'number', description: '正文页数目标（目录之后→参考文献之前；无目录则摘要之后→参考文献之前，不含摘要/目录/参考文献/附录）；缺省用赛项默认，rich_mode 打开时抬到 ≥50' },
+        max_pages: { type: 'number', description: '正文页数目标（下限，不是全文上限）：目录之后→参考文献之前；无目录则摘要之后→参考文献之前；不含摘要/目录/参考文献/附录代码/AI 声明。缺省用赛项默认，rich_mode 打开时抬到 ≥50' },
         figure_style: { type: 'string', enum: ['default', 'nature'], description: '数据图风格：default=去指纹随机配色；nature=深蓝主色+Arial+粗轴' },
         flowchart_engine: { type: 'string', enum: ['drawio', 'html'], description: '流程图引擎：drawio 产物可拖拽编辑；html 布局更好但不可拖拽。会替换步骤里的技能' },
         diagram_style: { type: 'string', enum: ['mono', 'plain', 'modern'], description: '流程图版式，仅 html 引擎生效' },
@@ -161,6 +162,7 @@ export function apply(ctx, config = {}) {
         `工作区已创建：${workspace}`,
         `插件构建：${BUILD}`,
         `赛项：${summarizeSwitches(switches)}`,
+        `页数口径：正文 ${switches.max_pages} 页 = 目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；**是目标（下限），不是全文页数上限**`,
         '',
         '检测到的输入：',
         `- 文件共 ${scan.total} 个：${Object.entries(scan.byKind).map(([k, v]) => `${k}=${v}`).join('，')}`,
@@ -233,9 +235,13 @@ export function apply(ctx, config = {}) {
       state.updatedAt = new Date().toISOString();
       await writeState(workspace, state);
 
+      const pageLine = (step.gates ?? []).includes('pages')
+        ? `页数口径（别搞错）：max_pages=${state.switches.max_pages} 是**正文页数目标（下限）**——目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文页数上限，正文超了不扣分。\n`
+        : '';
       const subagentPrompt =
         `你是数学建模竞赛工作流的第 ${index + 1}/${state.steps.length} 步执行者（${step.title}）。\n` +
         `先读取 ${promptPath} 并严格按其中的规格执行；工作目录固定为 ${workspace}。\n` +
+        pageLine +
         `遇到必须由用户决定、猜错会做错方向的信息，调 modeling_ask 提交问题并结束本轮等待；` +
         `能靠合理假设推进的，就在产物里写清假设继续。不要越过本步去写后续产物。完成后按 prompt 末尾的交付格式回复。`;
 

@@ -1,0 +1,21 @@
+# Changelog
+
+## 0.3.1
+
+修两个真实跑流程时暴露的问题：
+
+- **图步各管各的**：`figures` 闸门按步骤拆分对账范围——数据图步只对账 `DATA`/`GPTIMG`，流程图步只对账 `DRAWIO`/`TIKZ`，`TABLE` 不参与。之前数据图步会把下一步的流程图/架构图也算进本步，导致第 4 步永远验收不过、被迫提前干第 5 步的活。闸门现在会回 `scope` 与 `deferred`（不属于本步的类别及数量），prompt 里也写明「别的图由后续步骤负责，本步不要提前画」。
+- **页数口径下沉到主代理**：`max_pages` 统一表述为「正文页数目标（下限）」——目录之后→参考文献之前（无目录则摘要后→参考文献前），不含摘要/目录/参考文献/附录代码/AI 声明；是下限不是全文上限。新增/强化到：system prompt 协议、`modeling_init` 报告、`modeling_next` 子代理派发文本、CLAUDE.md 竞赛规则、论文步 prompt 契约、工具参数说明。
+
+## 0.3.0
+
+- 技能目录改中文命名（步骤 key 保持 ASCII）。
+- `figure_style=nature` 改用 `自然风格图表` 技能；补 `plot_utils.nature_palette()` / `nature_markers()`。
+- 随包 HTML 渲染管线：`_utils/screenshot_capture.py` + `_utils/katex/`。
+- 子代理提问中转：`modeling_ask` / `modeling_pending` / `modeling_answer`。
+- 严格模式论文数据核对（`paper_data_check` 闸门 + 两份 md）。
+- 新图标 `icon.png`。
+
+## 0.2.x
+
+- 初始版本：8 步流水线、确定性闸门、CLAUDE.md、技能整包复制。

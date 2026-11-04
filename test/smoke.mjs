@@ -9,7 +9,7 @@ import { resolveSteps } from '../lib/steps.js';
 import { scanInput, summarizeScan } from '../lib/scan.js';
 import { scaffoldWorkspace, readSkillBody } from '../lib/scaffold.js';
 import { buildStepPrompt } from '../lib/prompt.js';
-import { runGates, gatePaperDataCheck, gatePages } from '../lib/gates.js';
+import { runGates, gatePaperDataCheck, gatePages, gateFigures } from '../lib/gates.js';
 import { readState, writeState, nextPendingStep } from '../lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from '../lib/questions.js';
 
@@ -208,6 +208,41 @@ async function main() {
   });
   check('prompt 含提问协议（modeling_ask + 结束本轮）',
     askPrompt.includes('modeling_ask') && askPrompt.includes('结束本轮'));
+
+  // 12) 图步各管各的：数据图步不等流程图，流程图步不重画数据图
+  const figWs = path.join(TMP, 'fig_ws');
+  await mkdir(path.join(figWs, 'figures'), { recursive: true });
+  await writeFile(path.join(figWs, 'PROBLEM_ANALYSIS.md'), [
+    '<!-- BEGIN FIGURE_MANIFEST -->',
+    '**数据图**',
+    '- fig_q1_trend',
+    '- fig_q2_cost',
+    '**流程图**',
+    '- fig_flow_q1',
+    '**表格**',
+    '- TABLE_q1',
+    '<!-- END FIGURE_MANIFEST -->',
+  ].join('\n'), 'utf8');
+  for (const f of ['fig_q1_trend.pdf', 'fig_q2_cost.pdf']) await writeFile(path.join(figWs, 'figures', f), 'pdf', 'utf8');
+  const dataStep = { key: 'paper-figure', gates: ['figures'] };
+  const flowStep = { key: 'paper-figure-html', gates: ['figures'] };
+  const gf1 = await gateFigures(figWs, dataStep);
+  check('数据图步只对账数据图（不等流程图）',
+    gf1.ok === true && gf1.detail.planned === 2 && gf1.detail.deferred.FLOW === undefined && gf1.detail.byKind.DRAWIO === 1,
+    JSON.stringify({ planned: gf1.detail.planned, deferred: gf1.detail.deferred }));
+  const gf2 = await gateFigures(figWs, flowStep);
+  check('流程图步只对账流程图（不重画数据图）',
+    gf2.ok === false && gf2.detail.missing.includes('fig_flow_q1') && gf2.detail.deferred.DATA === 2,
+    JSON.stringify({ missing: gf2.detail.missing, deferred: gf2.detail.deferred }));
+  await writeFile(path.join(figWs, 'figures', 'fig_flow_q1.pdf'), 'pdf', 'utf8');
+  const gf3 = await gateFigures(figWs, flowStep);
+  check('流程图补齐后通过，表格不参与图对账', gf3.ok === true && gf3.detail.planned === 1, JSON.stringify(gf3.detail.byKind));
+
+  // 13) 页数口径写进 prompt（目标/下限，不是全文上限）
+  const paperStep2 = state.steps.find((s) => s.key === 'comp-paper-zh');
+  const paperText2 = await buildStepPrompt({ workspace, state, step: paperStep2, skillBody: await readSkillBody(ASSETS, paperStep.skill), index: 6, total: state.steps.length });
+  check('论文步 prompt 明确「不是全文页数上限」', paperText2.includes('不是全文页数上限'));
+  check('图表步 prompt 明确「不要提前画」流程图', (await buildStepPrompt({ workspace, state, step: state.steps.find((s) => s.key === 'paper-figure'), skillBody: 'x', index: 3, total: 8 })).includes('不要提前画'));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;

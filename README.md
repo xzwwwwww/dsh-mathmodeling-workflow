@@ -147,8 +147,8 @@ python _utils/paper_data_check.py --mode pdf    # Word/Markdown 用 --mode docx
 
 - `artifact`：主产物存在且 ≥ 最小体积（非 0 字节）。
 - `companions`：二级文件齐全（每个 > 50 字节，防空占位）。
-- `figures`：解析 `FIGURE_MANIFEST`（按粗体章节分类 DATA/TABLE/GPTIMG/DRAWIO/TIKZ），与实际 `figures/` 产出对账。
-- `pages`：**正文页数**（目录后→参考文献前，无目录则摘要后→参考文献前；不含摘要/目录/参考文献/附录）。按 `paper/sections/` 正文 section 去 LaTeX 命令后 900 字/页估算，低于目标 80% 判失败。
+- `figures`：解析 `FIGURE_MANIFEST`（按粗体章节分类 DATA/TABLE/GPTIMG/DRAWIO/TIKZ），与实际 `figures/` 产出对账。**按步骤分开对账**：数据图步只管 DATA/GPTIMG，流程图步只管 DRAWIO/TIKZ；别的类别由另一步负责，不会互相卡住（`TABLE` 不是文件，不参与对账）。
+- `pages`：**正文页数**（目录后→参考文献前，无目录则摘要后→参考文献前；不含摘要/目录/参考文献/附录/AI 声明）。按 `paper/sections/` 正文 section 去 LaTeX 命令后 900 字/页估算，低于目标 80% 判失败；它是**目标/下限**，不是全文页数上限。
 - `logic`：读 `LOGIC_CONTRACT_MACHINE` + `CROSS_PROBLEM_LEDGER.json` + `figures/*.json`，核方向探针（**数值证伪**）、零裕度、等价声称、漏变量、跨问矛盾；合同缺失则跳过（不误杀）。
 - `review_verdict`：`COMP_REVIEW_VERDICT.json` 三类计数全 0 + findings 为空 + 账本存在。
 - `ai_disclosure`：三态 × LaTeX/docx，`off` 时反查残留。
