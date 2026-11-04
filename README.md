@@ -1,5 +1,8 @@
 # dsh-mathmodeling-workflow
 
+[![DSH plugin](https://img.shields.io/badge/DSH-plugin-blue?logo=github)](https://github.com/topics/dsh-plugin)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 给 [DSH](https://github.com/deepseek-ai/deepseek-harness) 用的**数学建模竞赛全流程插件**：把赛题和数据放进一个文件夹，说一句话，它就会按 8 个步骤跑完——赛题分析、建模求解、编程实现、数据图、流程图、逻辑对抗复核、论文撰写、编译出 PDF。
 
 ```text
