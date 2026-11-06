@@ -3,8 +3,14 @@
 
 用法:
   python _utils/gpt_image.py --check
+  python _utils/gpt_image.py --dry-run --prompt "..."          # 只看最终提示词（含固定风格），不调 API
   python _utils/gpt_image.py --prompt "..." --output figures/fig_xxx.png --lang zh
   python _utils/gpt_image.py --prompt "..." --output figures/fig_xxx.png --lang en --aspect-ratio 16:9
+
+风格:
+  场景图统一使用 MCM Academic Illustration 固定风格（纯白底、黑白灰、细灰线稿、
+  二维矢量、正视图、轻阴影、学术论文插图质感），并在提示词里给出 Avoid 清单；
+  你只需要写【场景主题】【场景元素】【构图要求】，不要自己写颜色/卡通/3D 等风格词。
 
 模型与兜底:
   默认按 gpt-image-2.5-sunburst → gpt-image-2 的顺序尝试；主模型不可用时自动退到兜底模型。
@@ -44,29 +50,55 @@ from urllib.parse import urlparse
 # ============================================================
 # 提示词模板（集中管理，方便修改替换）
 # ============================================================
+# 场景图（概念图）固定风格：数学建模竞赛论文里的 Problem Background Illustration。
+# 之前这里是一段宽松的"自由发挥"提示词，生成出来常常像商业海报/卡通插画；
+# 现在改成硬约束的黑白灰技术插图风格，并在 prompt 里显式给出 Avoid 清单。
 
-# 中文语言适配前缀（精简版——GPT Image 越简洁效果越好）
-ZH_LANG_PREFIX = (
-    "生成一张科研级别的学术论文插图。"
-    "字体不要出现乱码，确保生成简体中文可适配。"
-    "数学变量保持拉丁字母。\n\n"
+MCM_TASK_ZH = (
+    "请绘制一张用于大学生数学建模竞赛论文的场景背景示意图（Problem Background Illustration）。\n"
+    "画面内容严格按下方场景描述（【场景主题】【场景元素】【构图要求】）来画；"
+    "风格必须严格符合后面的【固定风格】，最终效果应当像国际数学建模竞赛优秀论文里的插图，"
+    "而不是商业宣传海报或卡通插画。\n\n"
 )
 
-# 英文语言适配前缀
-EN_LANG_PREFIX = (
-    "Generate a research-grade academic paper illustration. "
-    "All text in English, clean sans-serif font.\n\n"
+MCM_TASK_EN = (
+    "Draw a scene background illustration (Problem Background Illustration) for a mathematical modeling "
+    "competition paper. Follow the scene description below, and strictly follow the fixed style block. "
+    "The result must look like a figure in an outstanding international mathematical modeling competition "
+    "paper, not a commercial poster or cartoon.\n\n"
 )
 
-# 统一风格后缀（极简——只保留必要约束，让 GPT Image 自由发挥）
-UNIFIED_STYLE_SUFFIX = (
-    "\n\n图表上方不需要标题。白色背景，无水印无签名无装饰边框。"
-    "配色自由搭配，丰富专业。4K分辨率。"
+MCM_STYLE_BLOCK = (
+    "\n\n【固定风格｜MCM Academic Illustration】\n"
+    "Academic monochrome technical illustration, minimalist architectural and engineering schematic drawing, "
+    "professional academic paper figure style.\n"
+    "- Pure white background with generous negative space.\n"
+    "- Strict monochromatic grayscale palette: black, white, light gray and medium gray.\n"
+    "- Thin, delicate, consistent gray outlines.\n"
+    "- Flat 2D vector-style rendering with subtle light-gray shading.\n"
+    "- Clean architectural elevation view, orthographic projection, straight-on perspective.\n"
+    "- Simplified but structurally accurate buildings, infrastructure, landscapes and environmental elements.\n"
+    "- Small human silhouettes and simplified trees for scale and context.\n"
+    "- Precise geometric shapes, restrained details and balanced composition.\n"
+    "- Minimal visual hierarchy, elegant academic typography and subtle annotation leader lines.\n"
+    "- Clean, sophisticated, publication-quality scientific illustration.\n"
+    "- Similar to figures in international engineering research papers and mathematical modeling competition papers.\n"
+    "\n【Avoid】colorful graphics, cartoon style, 3D rendering, photorealism, gradients, heavy shadows, "
+    "thick outlines, excessive decoration, complex textures and cluttered backgrounds.\n"
+    "\n【构图】横向构图，主体分布合理、空间层次清晰，重点突出场景之间的关系；"
+    "使用适当的标注和细引线说明重要元素。\n"
+    "\n【输出】High-resolution 4K-quality illustration, horizontal 16:9 composition."
 )
+
+# 兼容旧变量名（build_prompt 之外若有脚本引用）
+ZH_LANG_PREFIX = MCM_TASK_ZH
+EN_LANG_PREFIX = MCM_TASK_EN
+UNIFIED_STYLE_SUFFIX = MCM_STYLE_BLOCK
 
 # 安全约束后缀（精简）
 SAFETY_SUFFIX = (
-    "\n不要生成真人面孔或肖像照片，需要人物时用抽象图标代替。"
+    "\n不要生成真人面孔或肖像照片，需要人物时用抽象剪影/图标代替；"
+    "不要出现水印、签名、装饰边框；图内不要标题。"
 )
 
 DEFAULT_API_BASE = "https://api.openai.com/v1"
@@ -122,12 +154,19 @@ def _is_model_level_error(message: str) -> bool:
 
 
 def build_prompt(user_prompt: str, lang: str) -> str:
-    """Inject language, style, and safety constraints around the core scene prompt."""
-    if lang == "zh":
-        prefix = ZH_LANG_PREFIX
-    else:
-        prefix = EN_LANG_PREFIX
-    return prefix + user_prompt + UNIFIED_STYLE_SUFFIX + SAFETY_SUFFIX
+    """把场景描述包成完整提示词：任务说明 + 场景描述 + 固定 MCM 学术插图风格 + 安全约束。
+
+    场景描述由调用方（图表生成技能）按【场景主题】【场景元素】【构图要求】组织，
+    风格由本函数统一注入，保证不同赛事/不同题目出图风格一致。
+    """
+    prefix = MCM_TASK_ZH if lang == "zh" else MCM_TASK_EN
+    text_rule = (
+        "【标注文字】图内标注使用简体中文，字体清晰、无乱码；数学变量保持拉丁字母。"
+        if lang == "zh"
+        else "【Label text】Use English labels with a clean sans-serif font; keep math variables in Latin letters."
+    )
+    return prefix + user_prompt.strip() + MCM_STYLE_BLOCK + "\n" + text_rule + SAFETY_SUFFIX
+
 
 
 def _resolve_api_config(env: dict, cwd: Path) -> tuple[str, str]:
@@ -327,9 +366,18 @@ def main():
         help="覆盖模型链，逗号分隔（默认 %s；只给一个则不做兜底）" % ",".join(DEFAULT_IMAGE_MODELS),
     )
     parser.add_argument("--max-retries", type=int, default=3, help="每个模型的最大重试次数（默认 3）")
+    parser.add_argument("--dry-run", action="store_true", help="只打印最终提示词（含固定 MCM 风格），不调用 API")
     args = parser.parse_args()
 
     api_key, api_base = _resolve_api_config(os.environ, Path.cwd())
+
+    # --dry-run 模式：先看最终提示词，不要求配置 key
+    if args.dry_run:
+        if not args.prompt:
+            print("ERROR: --prompt is required")
+            sys.exit(1)
+        print(build_prompt(args.prompt, args.lang))
+        sys.exit(0)
 
     # --check 模式
     if args.check:

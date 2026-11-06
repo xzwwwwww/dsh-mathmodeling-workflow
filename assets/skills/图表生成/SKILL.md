@@ -468,9 +468,9 @@ if [ "$GPTIMG_PLAN_COUNT" -gt 0 ]; then
 fi
 ```
 
-Claude must construct the prompt BASED ON THE FINAL methods/results from MODELING_REPORT.md (not the initial plan — methods may have changed during modeling/coding). Only write the core scene/layout/content description — language adaptation, style guidelines, and safety rules are automatically injected by the tool.
+Claude must construct the prompt BASED ON THE FINAL methods/results from MODELING_REPORT.md (not the initial plan — methods may have changed during modeling/coding). **固定风格由工具统一注入**（黑白灰学术技术插图，见下），你只写场景内容，按【场景主题】【场景元素】【构图要求】三段组织。
 
-**⛔ 提示词越简洁，GPT Image 发挥越好。只描述场景和元素，不要写死颜色和布局细节。**
+**⛔ 不要自己写颜色/风格/渲染方式。** 不要出现 "colorful / 卡通 / 3D / 写实 / 彩色 / 丰富配色 / 渐变" 这类词——工具会注入 Academic Monochrome Technical Illustration 固定风格，冲突描述会让出图跑偏。
 
 **GPT Image 只用于场景示意图（物理/工程类赛题的问题背景图）。技术路线图、求解流程图、模型架构图使用 DrawIO。**
 
@@ -481,21 +481,24 @@ Claude must construct the prompt BASED ON THE FINAL methods/results from MODELIN
 仅适用于有具体物理/工程空间场景的赛题（光学、无人机、传感器、交通、热传导等）。
 纯数据/统计类赛题不需要。
 
-Claude 根据赛题自由构造 prompt，参考格式：
+按下面格式写 `--prompt`（工具会自动补固定风格/安全/构图约束）：
 
 ```
-生成一张学术论文插图风格的{场景名}示意图。
-{俯视/侧视/3D等距}视角。
-画面包含：{元素1}、{元素2}、{元素3}。
-用虚线箭头表示{某种关系/流向}，用不同颜色区分{不同类别}。
-包含图例说明各颜色含义。
+请绘制一张用于大学生数学建模竞赛论文的场景背景示意图。
+【场景主题】
+<例如：城市交通系统 / 森林火灾 / 校园建筑 / 城市洪水 / 物流运输 / 能源系统>
+【场景元素】
+<需要出现的建筑、人物、道路、设备、自然环境等，不超过 6 个视觉元素>
+【构图要求】
+横向构图，主体分布合理，空间层次清晰，重点突出场景之间的关系；
+用适当标注和细引线说明重要元素（用灰度高/低和线宽区分层次，不要用颜色）。
 ```
 
 ⛔ 约束：
-- 不超过 6 个视觉元素
-- 不生成真人面孔/肖像——需要人物时用抽象图标
-- 必须包含图例框解释颜色含义
-- 尺寸标注用数学变量（R, H, L）不用具体数字
+- 不超过 6 个视觉元素；不要写具体颜色
+- 不生成真人面孔/肖像——人物只做抽象剪影
+- 标注文字用简体中文（`--lang zh`），数学变量用拉丁字母（R, H, L），不写具体数字
+- 出图后先 `--dry-run` 看一眼最终提示词（确认没有"彩色/卡通"等冲突词），再正式生成
 
 </gpt_image_prompt_templates>
 
@@ -507,10 +510,13 @@ GPTIMG_FAILED=""
 # For each planned figure, call gpt_image.py
 # Example (Claude generates the actual calls based on the plan):
 $PYTHON _utils/gpt_image.py \
-  --prompt "Generate a structured technical roadmap..." \
-  --output figures/fig_roadmap.png \
+  --prompt "请绘制一张用于大学生数学建模竞赛论文的场景背景示意图。
+【场景主题】城市交通系统
+【场景元素】接驳车、候车乘客、道路、公交站台、调度中心
+【构图要求】横向构图，主体分布合理，空间层次清晰，重点突出场景之间的关系；用适当标注和细引线说明重要元素。" \
+  --output figures/fig_scene_q1.png \
   --lang $GPTIMG_LANG \
-  --aspect-ratio 9:16 \
+  --aspect-ratio 16:9 \
   --max-retries 3
 
 if [ -f figures/fig_roadmap.pdf ]; then

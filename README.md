@@ -175,7 +175,26 @@ agent 会回显类似：
 - `base_url`：中转站给接口地址就填（例如 `https://xxx.com/v1`），**留空则用官方** `https://api.openai.com/v1`；
 - 也可以不改文件，直接设环境变量 `GPT_IMAGE_API_KEY` / `GPT_IMAGE_BASE_URL`（环境变量优先级更高）；
 - 检查是否配好：`python _utils/gpt_image.py --check`；
+- 想看实际发出去的提示词（含固定风格）：`python _utils/gpt_image.py --dry-run --prompt "..."`；
 - **没配也能跑**：规划里的概念图会被自动跳过，不影响其余步骤。
+
+### 固定出图风格：MCM Academic Illustration
+
+场景图统一按「国际数学建模竞赛优秀论文里的 Problem Background Illustration」出图，工具会自动拼上这段固定风格，不需要你写：
+
+> Academic monochrome technical illustration, minimalist architectural and engineering schematic drawing,
+> professional academic paper figure style. 纯白背景、黑白灰配色、纤细灰色线稿、二维矢量、正视图/平视、
+> 简化几何造型、轻微灰阴影、细引线标注；避免彩色、卡通、3D、写实、渐变、粗描边、复杂纹理。
+
+也就是说：场景图是**黑白灰的学术插图**，不是海报/插画。你（或技能）只需要按下面三段写内容：
+
+```text
+【场景主题】城市交通系统
+【场景元素】接驳车、候车乘客、道路、公交站台、调度中心
+【构图要求】横向构图，主体分布合理，空间层次清晰，用细引线标注重要元素
+```
+
+`--aspect-ratio` 默认 `16:9`，适合横向放入论文正文。
 
 如果你自己有 ChatGPT 账号，也可以直接拉 Codex CLI，用它内置的 image gen 出图（本仓库的插件图标就是这么生成的）：
 

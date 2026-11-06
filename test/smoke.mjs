@@ -249,6 +249,15 @@ async function main() {
   check('论文步 prompt 明确「不是全文页数上限」', paperText2.includes('不是全文页数上限'));
   check('图表步 prompt 明确「不要提前画」流程图', (await buildStepPrompt({ workspace, state, step: state.steps.find((s) => s.key === 'paper-figure'), skillBody: 'x', index: 3, total: 8 })).includes('不要提前画'));
 
+  // 14) 场景图固定风格（MCM Academic Illustration）
+  const gptSrc = await readFile(path.join(ASSETS, 'utils', 'gpt_image.py'), 'utf8');
+  check('场景图内置 MCM 学术插图固定风格',
+    gptSrc.includes('Academic monochrome technical illustration')
+      && gptSrc.includes('Strict monochromatic grayscale palette')
+      && gptSrc.includes('Avoid'));
+  check('场景图提示词模板含三段结构', gptSrc.includes('【场景主题】') && gptSrc.includes('【场景元素】') && gptSrc.includes('【构图要求】'));
+  check('支持 --dry-run 预览最终提示词', gptSrc.includes('--dry-run'));
+
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;
 }
