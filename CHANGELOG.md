@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4
+
+兼容性验证与文档：
+
+- 在 DSH `0.2.2-rc.1`（Node 24.21 / pnpm 11.28.5）实测通过：bundle 正常加载、8 个 `modeling_*` 工具注册、system prompt 协议注入、`modeling_init` 建工作区、`modeling_next` 渲染 prompt、`modeling_ask`/`modeling_pending`/`modeling_answer` 提问中转、`modeling_switches` 改开关、`modeling_finish` 闸门验收全部正常。
+- 已知升级行为：升级 DSH 后 profile 的 bundle 选择可能被重置（本插件与 dsh-purge 都被置为未启用），在插件管理里重新启用一次即可。
+- README 增加兼容性说明。
 ## 0.3.3
 
 - 随包提供 `_utils/_gpt_image_config.json` 模板（`api_key` / `base_url` 留空），初始化时复制进工作区，用户不用猜该填哪个文件。
