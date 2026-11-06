@@ -438,7 +438,7 @@ else
   #    又会误收流程图 → 用数据图 PROMPT 检流程图/插画会得到牛头不对马嘴的反馈、误导修图）。
   #    数据图 = matplotlib gen_fig 脚本产的；流程/架构图有同名 .drawio（归 paper-figure-drawio 的
   #    vision，已单独质检，本步不重复检）；TikZ 有同名 .tex 含 tikzpicture；GPT Image 插画是
-  #    fig_scene*/fig_gptimg*（AI 生成的场景图，非数据图）。判据：
+  #    fig_scene*/fig_mechanism*/fig_gptimg*（AI 生成的场景图，非数据图）。判据：
   #      正向铁证：存在同名 gen_fig 脚本（规范 one gen_fig script per figure）→ 一定是数据图
   #      负向兜底：无 .drawio、无 tikz .tex、非 GPT 前缀 → 可能是「一脚本产多图」的数据图，也检
   DF_LIST=()
@@ -457,7 +457,7 @@ else
       _skip=0
       [ -f "figures/${bn}.drawio" ] && _skip=1
       [ -f "figures/${bn}.tex" ] && grep -q '\\begin{tikzpicture}' "figures/${bn}.tex" 2>/dev/null && _skip=1
-      case "$bn" in fig_scene*|fig_gptimg*) _skip=1 ;; esac
+      case "$bn" in fig_scene*|fig_mechanism*|fig_gptimg*) _skip=1 ;; esac
       [ "$_skip" = "0" ] && is_data=1
     fi
     [ "$is_data" = "1" ] && DF_LIST+=("$pdf")

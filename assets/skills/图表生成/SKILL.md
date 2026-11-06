@@ -468,11 +468,17 @@ if [ "$GPTIMG_PLAN_COUNT" -gt 0 ]; then
 fi
 ```
 
-Claude must construct the prompt BASED ON THE FINAL methods/results from MODELING_REPORT.md (not the initial plan — methods may have changed during modeling/coding). **固定风格由工具统一注入**（黑白灰学术技术插图，见下），你只写场景内容，按【场景主题】【场景元素】【构图要求】三段组织。
+Claude must construct the prompt BASED ON THE FINAL methods/results from MODELING_REPORT.md (not the initial plan — methods may have changed during modeling/coding). **固定风格由工具统一注入**，你只写内容：
 
-**⛔ 不要自己写颜色/风格/渲染方式。** 不要出现 "colorful / 卡通 / 写实照片 / 彩色 / 丰富配色 / 渐变" 这类词——工具会注入 Academic Monochrome Technical Illustration 固定风格，冲突描述会让出图跑偏。2D 和 3D 都可以，但必须是扁平矢量风格（Flat 2D/3D vector-style），不要写"照片级 3D / 写实渲染"。
+- 场景图（`--style scene`，默认）：黑白灰学术技术插图，按【场景主题】【场景元素】【构图要求】组织；
+- 机理图（`--style mechanism`）：低饱和粉彩学术机制示意图，按【主题】【内容要求】组织。
 
-**GPT Image 只用于场景示意图（物理/工程类赛题的问题背景图）。技术路线图、求解流程图、模型架构图使用 DrawIO。**
+**⛔ 不要自己写颜色/风格/渲染方式。** 场景图不要出现 "colorful / 卡通 / 写实照片 / 彩色 / 丰富配色 / 渐变"；机理图不要出现 "卡通 / 鲜艳饱和色 / 照片级 3D / 杂乱"。工具会注入对应固定风格，冲突描述会让出图跑偏。
+
+**GPT Image 的两种用途**：
+- **场景图**：物理/工程类赛题的问题背景图（论文「问题重述/问题分析」开头）→ `--style scene`；
+- **机理图**：系统机理/机制结构图（输入→机制→计算→输出、热网络、调度系统、反馈控制）→ `--style mechanism`。
+- **仍然用 DrawIO 的**：技术路线图、求解流程图、纯步骤流程（需要可拖拽编辑）、严格几何示意图（TikZ）。
 
 <gpt_image_prompt_templates>
 
@@ -498,7 +504,35 @@ Claude must construct the prompt BASED ON THE FINAL methods/results from MODELIN
 - 不超过 6 个视觉元素；不要写具体颜色
 - 不生成真人面孔/肖像——人物只做抽象剪影
 - 标注文字用简体中文（`--lang zh`），数学变量用拉丁字母（R, H, L），不写具体数字
-- 出图后先 `--dry-run` 看一眼最终提示词（确认没有"彩色/卡通"等冲突词），再正式生成
+- 出图前先 `--dry-run` 看一眼最终提示词（确认没有"彩色/卡通"等冲突词），再正式生成
+
+#### 机理示意图 (fig_mechanism.png)
+
+适用于需要讲清「系统怎么运作」的题：热传导/热网络、交通调度、火灾响应、洪水传播、供应链、能源调控、反馈控制等。
+用在论文的「问题分析 / 模型建立」章节，替代"文字描述机制"。
+
+按下面格式写 `--prompt`（**必须加 `--style mechanism`**）：
+
+```
+请绘制一张用于数学建模竞赛论文的学术机理示意图。
+【主题】
+<例如：校园建筑热传导机理 / 城市交通调度系统 / 森林火灾响应机制 / 供应链优化系统>
+【内容要求】
+• 展示系统的主要输入、核心机制、计算过程和输出结果；
+• 用圆角矩形模块表示不同功能单元；
+• 用箭头表示信息流、控制流或物理传递关系；
+• 在适当位置加入变量符号、参数名称和简洁公式；
+• 用小图标辅助表达现实含义；
+• 结构清晰，逻辑层次明确，适合出现在数学建模论文正文中。
+```
+
+可选补充关键词（按题目情境挑 2-4 个，不要堆砌）：柔和粉彩学术图表、工程期刊图、热网络示意图、紧凑模块化布局、方程式整合信息图、圆形科学模块、清晰流线箭头、可出版图表、基于机制的系统图示。
+
+⛔ 约束：
+- 一张图只讲一条主线（输入→机制→计算→输出），不要塞进多个不相关子系统
+- 公式只写核心 1-3 个，变量名与论文正文保持一致（同一符号同一含义）
+- 不生成真人面孔/肖像；不要写具体颜色值（风格已固定为低饱和 pastel）
+- 出图前先 `--dry-run --style mechanism` 检查最终提示词
 
 </gpt_image_prompt_templates>
 
@@ -508,13 +542,24 @@ Claude must construct the prompt BASED ON THE FINAL methods/results from MODELIN
 GPTIMG_FAILED=""
 
 # For each planned figure, call gpt_image.py
-# Example (Claude generates the actual calls based on the plan):
+# Example A — 场景图（默认 scene 风格）:
 $PYTHON _utils/gpt_image.py \
   --prompt "请绘制一张用于大学生数学建模竞赛论文的场景背景示意图。
 【场景主题】城市交通系统
 【场景元素】接驳车、候车乘客、道路、公交站台、调度中心
 【构图要求】横向构图，主体分布合理，空间层次清晰，重点突出场景之间的关系；用适当标注和细引线说明重要元素。" \
   --output figures/fig_scene_q1.png \
+  --lang $GPTIMG_LANG \
+  --aspect-ratio 16:9 \
+  --max-retries 3
+
+# Example B — 机理图（--style mechanism，低饱和粉彩机制示意图）:
+$PYTHON _utils/gpt_image.py \
+  --style mechanism \
+  --prompt "请绘制一张用于数学建模竞赛论文的学术机理示意图。
+【主题】城市交通调度系统
+【内容要求】展示客流输入、调度核心机制、排队/延误计算过程和输出结果；圆角矩形模块表示功能单元；箭头表示信息流与控制流；适当位置加变量符号 W、λ、μ 和简洁公式。" \
+  --output figures/fig_mechanism_q1.png \
   --lang $GPTIMG_LANG \
   --aspect-ratio 16:9 \
   --max-retries 3
@@ -569,7 +614,7 @@ Status meanings:
 
 对每张成功生成的 GPT Image 图，检查：
 ```bash
-for img in figures/fig_scene*.pdf figures/fig_gptimg*.pdf; do
+for img in figures/fig_scene*.pdf figures/fig_mechanism*.pdf figures/fig_gptimg*.pdf; do
     [ -f "$img" ] || continue
     bn=$(basename "$img")
     sz=$(wc -c < "$img")
@@ -946,7 +991,7 @@ else
   #    又会误收流程图 → 用数据图 PROMPT 检流程图/插画会得到牛头不对马嘴的反馈、误导修图）。
   #    数据图 = matplotlib gen_fig 脚本产的；流程/架构图有同名 .drawio（归 流程图绘制 的
   #    vision，已单独质检，本步不重复检）；TikZ 有同名 .tex 含 tikzpicture；GPT Image 插画是
-  #    fig_scene*/fig_gptimg*（AI 生成的场景图，非数据图）。判据：
+  #    fig_scene*/fig_mechanism*/fig_gptimg*（AI 生成的场景图，非数据图）。判据：
   #      正向铁证：存在同名 gen_fig 脚本（规范 one gen_fig script per figure）→ 一定是数据图
   #      负向兜底：无 .drawio、无 tikz .tex、非 GPT 前缀 → 可能是「一脚本产多图」的数据图，也检
   DF_LIST=""
@@ -963,7 +1008,7 @@ else
       _skip=0
       [ -f "figures/${bn}.drawio" ] && _skip=1
       [ -f "figures/${bn}.tex" ] && grep -q '\\begin{tikzpicture}' "figures/${bn}.tex" 2>/dev/null && _skip=1
-      case "$bn" in fig_scene*|fig_gptimg*) _skip=1 ;; esac
+      case "$bn" in fig_scene*|fig_mechanism*|fig_gptimg*) _skip=1 ;; esac
       [ "$_skip" = "0" ] && is_data=1
     fi
     [ "$is_data" = "1" ] && DF_LIST="$DF_LIST $pdf"
@@ -1368,7 +1413,7 @@ echo "  (TikZ/DrawIO diagrams will be generated and validated by the next step: 
 # 4.6 GPT Image figures (if planned)
 GPTIMG_PLANNED=$(grep -ci 'GPTIMG\|GPT.Image\|场景示意' PROBLEM_ANALYSIS.md 2>/dev/null || echo 0)
 if [ "$GPTIMG_PLANNED" -gt 0 ]; then
-    GPTIMG_PDF=$(ls figures/fig_scene*.pdf figures/fig_gptimg*.pdf 2>/dev/null | wc -l)
+    GPTIMG_PDF=$(ls figures/fig_scene*.pdf figures/fig_mechanism*.pdf figures/fig_gptimg*.pdf 2>/dev/null | wc -l)
     if [ "$GPTIMG_PDF" -gt 0 ]; then
         echo "✅ GPT Image figures: $GPTIMG_PDF PDFs"
     else

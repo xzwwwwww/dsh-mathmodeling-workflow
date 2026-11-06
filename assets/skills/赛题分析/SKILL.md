@@ -644,10 +644,13 @@ DrawIO 图（技术路线图/流程图/Pipeline/指标体系/决策树/甘特图
 TikZ 图（模型架构图/变量关系图/算法流程图/几何示意图，需要精确连线或公式）：
 - TikZ-1: [图类型] → tikz_diagrams.tex → [章节位置] [按需]
 
-GPT Image 场景示意图（仅物理/工程类赛题）：
+GPT Image 图（两种：场景图 / 机理图）：
 - GPTIMG-1: {场景名}示意图 → fig_scene.png → 问题重述章节 (1_restatement.tex) [按需]
   （出图会统一套用 MCM Academic Illustration 风格：纯白底、黑白灰、细线稿、正视图、学术论文插图；
   规划时只需说明场景主题/元素/构图，不要写"彩色、卡通、写实、照片级 3D"这类风格词）
+- GPTIMG-2: {系统名}机理示意图 → fig_mechanism.png → 问题分析/模型建立章节 [按需]
+  （出图套用 Scientific Mechanism Diagram 风格：白底、低饱和粉彩、圆角矩形模块、细箭头、2D 矢量、论文级排版；
+  规划时说明【主题】【内容要求】，可选关键词：热网络示意图/紧凑模块化布局/方程式整合信息图/清晰流线箭头）
 
 总计: N 张 DrawIO + P 张 TikZ + M 张 GPT Image
 ```
@@ -676,10 +679,11 @@ GPT Image 场景示意图（仅物理/工程类赛题）：
 **TikZ 图（图表生成 产出 tikz_*.pdf）：**
 - tikz_model_arch
 
-**GPT Image 场景图（paper-illustration 产出 .png）：**
+**GPT Image 图（场景图 / 机理图，图表生成 产出 .png+.pdf）：**
 - fig_scene
+- fig_mechanism
 
-**总数：DATA=3, DRAWIO=3, TIKZ=1, GPTIMG=1, ALL=8**
+**总数：DATA=3, DRAWIO=3, TIKZ=1, GPTIMG=2, ALL=9**
 <!-- END FIGURE_MANIFEST -->
 ```
 
@@ -698,7 +702,7 @@ else
   MANIFEST=$(sed -n "${START},${END}p" PROBLEM_ANALYSIS.md)
   # (原 ALL_FIGS 变量已移除：改用与完成铁律块一致的 DATA= 标记法后不再需要 fig_ 总数做减法)
   N_DRAWIO=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+fig_(roadmap|flow_|pipeline|index_|gantt|network|framework|model_decision)')
-  N_GPTIMG=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+fig_scene')
+  N_GPTIMG=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+(fig_scene|fig_mechanism)')
   N_TIKZ=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+tikz_')
   # ⛔ 数据图计数口径必须与「完成铁律」块(本文件开头 PASS 块)完全一致：优先取 DATA=N 标记，
   #    取不到再数 "**数据图**" 章节内的 - fig_ 行。之前这里用 ALL_FIGS-N_DRAWIO-N_GPTIMG 的减法

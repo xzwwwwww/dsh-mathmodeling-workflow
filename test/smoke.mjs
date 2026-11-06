@@ -257,6 +257,10 @@ async function main() {
       && gptSrc.includes('Flat 2D/3D vector-style rendering')
       && gptSrc.includes('Avoid'));
   check('场景图提示词模板含三段结构', gptSrc.includes('【场景主题】') && gptSrc.includes('【场景元素】') && gptSrc.includes('【构图要求】'));
+  check('内置机理图固定风格（Scientific Mechanism Diagram）',
+    gptSrc.includes('Scientific mechanism diagram') && gptSrc.includes('Soft pastel palette') && gptSrc.includes('Rounded-rectangle modules'));
+  check('机理图模板含【主题】【内容要求】且支持 --style',
+    gptSrc.includes('【主题】') && gptSrc.includes('【内容要求】') && gptSrc.includes('--style'));
   check('支持 --dry-run 预览最终提示词', gptSrc.includes('--dry-run'));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);

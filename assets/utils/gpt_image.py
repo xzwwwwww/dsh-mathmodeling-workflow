@@ -6,11 +6,15 @@
   python _utils/gpt_image.py --dry-run --prompt "..."          # 只看最终提示词（含固定风格），不调 API
   python _utils/gpt_image.py --prompt "..." --output figures/fig_xxx.png --lang zh
   python _utils/gpt_image.py --prompt "..." --output figures/fig_xxx.png --lang en --aspect-ratio 16:9
+  python _utils/gpt_image.py --style mechanism --prompt "..." --output figures/fig_mechanism.png
 
 风格:
-  场景图统一使用 MCM Academic Illustration 固定风格（纯白底、黑白灰、细灰线稿、
-  二维/三维扁平矢量（Flat 2D/3D）、正视图/正交视角、轻阴影、学术论文插图质感），
-  并在提示词里给出 Avoid 清单；你只需要写【场景主题】【场景元素】【构图要求】，
+  两种固定风格由工具注入，调用方只写内容：
+  - scene（默认）：场景图/问题背景图 —— 黑白灰技术插图（纯白底、黑/白/灰、细灰线稿、
+    二维/三维扁平矢量、正视图/正交视角、轻阴影、学术论文插图质感）；
+  - mechanism：机理图/系统机制示意图 —— 低饱和粉彩学术示意图（白底、pastel 配色、
+    圆角矩形模块、细箭头连接、中心节点层次、必要公式与变量、扁平 2D 矢量、论文级排版）。
+  你只需要写【场景主题】【场景元素】【构图要求】（scene）或【主题】【内容要求】（mechanism），
   不要自己写颜色/卡通/写实 等风格词。
 
 模型与兜底:
@@ -51,10 +55,12 @@ from urllib.parse import urlparse
 # ============================================================
 # 提示词模板（集中管理，方便修改替换）
 # ============================================================
-# 场景图（概念图）固定风格：数学建模竞赛论文里的 Problem Background Illustration。
-# 之前这里是一段宽松的"自由发挥"提示词，生成出来常常像商业海报/卡通插画；
-# 现在改成硬约束的黑白灰技术插图风格，并在 prompt 里显式给出 Avoid 清单。
+# 两种固定风格（--style）：
+#   scene     —— 场景图 / 问题背景图（Problem Background Illustration）：黑白灰技术插图
+#   mechanism —— 机理图 / 系统机制示意图（Scientific mechanism diagram）：低饱和粉彩学术示意图
+# 两种都用硬约束 + Avoid 清单；调用方只写内容（主题/元素/构图 或 主题/内容要求），不写风格词。
 
+# ---------- 场景图（scene） ----------
 MCM_TASK_ZH = (
     "请绘制一张用于大学生数学建模竞赛论文的场景背景示意图（Problem Background Illustration）。\n"
     "画面内容严格按下方场景描述（【场景主题】【场景元素】【构图要求】）来画；"
@@ -89,6 +95,35 @@ MCM_STYLE_BLOCK = (
     "\n【构图】横向构图，主体分布合理、空间层次清晰，重点突出场景之间的关系；"
     "使用适当的标注和细引线说明重要元素。\n"
     "\n【输出】High-resolution 4K-quality illustration, horizontal 16:9 composition."
+)
+
+# ---------- 机理图（mechanism） ----------
+MECH_TASK_ZH = (
+    "请绘制一张用于数学建模竞赛论文的学术机理示意图（机制图 / 系统示意图）。\n"
+    "画面内容严格按下方【主题】【内容要求】来画；风格必须严格符合后面的【固定风格】。\n\n"
+)
+
+MECH_TASK_EN = (
+    "Draw an academic mechanism diagram (system schematic) for a mathematical modeling competition paper. "
+    "Follow the theme and content requirements below, and strictly follow the fixed style block.\n\n"
+)
+
+MECH_STYLE_BLOCK = (
+    "\n\n【固定风格｜Scientific Mechanism Diagram】\n"
+    "Scientific mechanism diagram, academic system schematic, elegant research-paper figure style.\n"
+    "- Clean white background with generous white space.\n"
+    "- Soft pastel palette with low saturation: light blue, light green, light beige, light purple and light pink.\n"
+    "- Rounded-rectangle modules with soft borders and light fills.\n"
+    "- Thin, clear connecting arrows showing flow and causal relationships.\n"
+    "- Center-node-based system architecture with clear logical hierarchy.\n"
+    "- Concise mathematical symbols, variable labels and equations where necessary.\n"
+    "- Small simple icons for environment inputs, data, models, controllers, outputs or physical components.\n"
+    "- Flat 2D vector style, precise geometry, tidy alignment, publication-grade layout.\n"
+    "- Professional scientific illustration suitable for mathematical modeling papers or engineering journals.\n"
+    "- Information-rich yet visually clean and elegant.\n"
+    "\n【Avoid】cartoon style, over-decorated graphics, thick outlines, bright saturated colors, cluttered composition, "
+    "photorealism, 3D rendering, messy layout, excessive shadows.\n"
+    "\n【输出】High-resolution, publication-quality mechanism diagram, suitable for MCM/ICM paper figures."
 )
 
 # 兼容旧变量名（build_prompt 之外若有脚本引用）
@@ -154,19 +189,27 @@ def _is_model_level_error(message: str) -> bool:
     return code == 400 and "model" in low
 
 
-def build_prompt(user_prompt: str, lang: str) -> str:
-    """把场景描述包成完整提示词：任务说明 + 场景描述 + 固定 MCM 学术插图风格 + 安全约束。
+def build_prompt(user_prompt: str, lang: str, style: str = "scene") -> str:
+    """把内容描述包成完整提示词：任务说明 + 内容 + 固定风格 + 安全约束。
 
-    场景描述由调用方（图表生成技能）按【场景主题】【场景元素】【构图要求】组织，
-    风格由本函数统一注入，保证不同赛事/不同题目出图风格一致。
+    style:
+      - scene（默认）：场景图/问题背景图，黑白灰技术插图；
+      - mechanism：机理图/系统机制示意图，低饱和粉彩学术示意图。
+    内容由调用方（图表生成技能）组织：scene 用【场景主题】【场景元素】【构图要求】，
+    mechanism 用【主题】【内容要求】；风格由本函数统一注入。
     """
-    prefix = MCM_TASK_ZH if lang == "zh" else MCM_TASK_EN
+    if style == "mechanism":
+        prefix = MECH_TASK_ZH if lang == "zh" else MECH_TASK_EN
+        block = MECH_STYLE_BLOCK
+    else:
+        prefix = MCM_TASK_ZH if lang == "zh" else MCM_TASK_EN
+        block = MCM_STYLE_BLOCK
     text_rule = (
         "【标注文字】图内标注使用简体中文，字体清晰、无乱码；数学变量保持拉丁字母。"
         if lang == "zh"
         else "【Label text】Use English labels with a clean sans-serif font; keep math variables in Latin letters."
     )
-    return prefix + user_prompt.strip() + MCM_STYLE_BLOCK + "\n" + text_rule + SAFETY_SUFFIX
+    return prefix + user_prompt.strip() + block + "\n" + text_rule + SAFETY_SUFFIX
 
 
 
@@ -367,7 +410,8 @@ def main():
         help="覆盖模型链，逗号分隔（默认 %s；只给一个则不做兜底）" % ",".join(DEFAULT_IMAGE_MODELS),
     )
     parser.add_argument("--max-retries", type=int, default=3, help="每个模型的最大重试次数（默认 3）")
-    parser.add_argument("--dry-run", action="store_true", help="只打印最终提示词（含固定 MCM 风格），不调用 API")
+    parser.add_argument("--style", choices=["scene", "mechanism"], default="scene", help="固定风格：scene=场景图（黑白灰技术插图，默认）；mechanism=机理图（低饱和粉彩学术示意图）")
+    parser.add_argument("--dry-run", action="store_true", help="只打印最终提示词（含固定风格），不调用 API")
     args = parser.parse_args()
 
     api_key, api_base = _resolve_api_config(os.environ, Path.cwd())
@@ -377,7 +421,7 @@ def main():
         if not args.prompt:
             print("ERROR: --prompt is required")
             sys.exit(1)
-        print(build_prompt(args.prompt, args.lang))
+        print(build_prompt(args.prompt, args.lang, args.style))
         sys.exit(0)
 
     # --check 模式
@@ -401,7 +445,7 @@ def main():
         sys.exit(1)
 
     # 构建完整 prompt（注入语言/风格/安全约束）
-    full_prompt = build_prompt(args.prompt, args.lang)
+    full_prompt = build_prompt(args.prompt, args.lang, args.style)
 
     # 确保输出目录存在
     out_path = Path(args.output)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.7
+
+- GPT Image 新增**机理图**能力：`--style mechanism` 出「Scientific Mechanism Diagram」风格（白底、低饱和 pastel、圆角矩形模块、细箭头、中心节点层次、公式与变量标注、扁平 2D 矢量、论文级排版），默认 `--style scene` 保持原有黑白灰场景图不变。
+- 机理图提示词模板：【主题】【内容要求】，附可选补充关键词（热网络示意图/紧凑模块化布局/方程式整合信息图…）。
+- 图表生成技能：区分「场景图 fig_scene」与「机理图 fig_mechanism」两种 GPT Image 用途，给出各自模板与使用边界（技术路线/求解流程仍用 DrawIO）；对账/统计脚本纳入 `fig_mechanism*`。
+- 赛题分析技能：manifest 可规划机理图（`fig_mechanism`），示例与统计同步。
+- 闸门：manifest 粗体章节关键词增加「机理图/机制图/机制示意/系统示意图」→ 归入 GPTIMG。
+- README 增加机理图小节；smoke 增加机理图风格断言。
 ## 0.3.6
 
 - 场景图风格放开 3D：`Flat 2D vector-style rendering` → **`Flat 2D/3D vector-style rendering`**（扁平矢量 2D/3D 都允许），Avoid 清单里的 `3D rendering` 改为 `photorealistic 3D rendering`（仍禁止照片级写实 3D）。
