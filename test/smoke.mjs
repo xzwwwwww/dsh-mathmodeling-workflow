@@ -9,7 +9,7 @@ import { resolveSteps } from '../lib/steps.js';
 import { scanInput, summarizeScan } from '../lib/scan.js';
 import { scaffoldWorkspace, readSkillBody } from '../lib/scaffold.js';
 import { buildStepPrompt } from '../lib/prompt.js';
-import { runGates, gatePaperDataCheck, gatePages, gateFigures } from '../lib/gates.js';
+import { runGates, gatePaperDataCheck, gatePages, gateFigures, parseFigureManifest } from '../lib/gates.js';
 import { readState, writeState, nextPendingStep } from '../lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from '../lib/questions.js';
 
@@ -242,6 +242,30 @@ async function main() {
   await writeFile(path.join(figWs, 'figures', 'fig_flow_q1.pdf'), 'pdf', 'utf8');
   const gf3 = await gateFigures(figWs, flowStep);
   check('流程图补齐后通过，表格不参与图对账', gf3.ok === true && gf3.detail.planned === 1, JSON.stringify(gf3.detail.byKind));
+
+  // 12b) 机理图：章节名归类 + 有无生图 key 时的对账行为
+  const mechWs = path.join(TMP, 'mech_ws');
+  await mkdir(path.join(mechWs, 'figures'), { recursive: true });
+  await writeFile(path.join(mechWs, 'PROBLEM_ANALYSIS.md'), [
+    '<!-- BEGIN FIGURE_MANIFEST -->',
+    '**数据图**',
+    '- fig_q1_trend',
+    '**机理示意图**',
+    '- fig_mechanism_q1',
+    '<!-- END FIGURE_MANIFEST -->',
+  ].join('\n'), 'utf8');
+  await writeFile(path.join(mechWs, 'figures', 'fig_q1_trend.pdf'), 'pdf', 'utf8');
+  const mechParse = parseFigureManifest(await readFile(path.join(mechWs, 'PROBLEM_ANALYSIS.md'), 'utf8'));
+  check('「机理示意图」章节归入 GPTIMG', (mechParse?.GPTIMG ?? []).includes('fig_mechanism_q1'), JSON.stringify(mechParse));
+  const mechNoKey = await gateFigures(mechWs, { key: 'paper-figure', gates: ['figures'] });
+  check('无 key 时机理图自动跳过', mechNoKey.ok === true && (mechNoKey.detail.gptImgSkipped ?? []).includes('fig_mechanism_q1'),
+    JSON.stringify({ ok: mechNoKey.ok, skipped: mechNoKey.detail.gptImgSkipped }));
+  process.env.GPT_IMAGE_API_KEY = 'test-key';
+  const mechKey = await gateFigures(mechWs, { key: 'paper-figure', gates: ['figures'] });
+  delete process.env.GPT_IMAGE_API_KEY;
+  check('有 key 时机理图纳入对账（缺图即失败）',
+    mechKey.ok === false && mechKey.detail.missing.includes('fig_mechanism_q1'),
+    JSON.stringify({ ok: mechKey.ok, missing: mechKey.detail.missing }));
 
   // 13) 页数口径写进 prompt（目标/下限，不是全文上限）
   const paperStep2 = state.steps.find((s) => s.key === 'comp-paper-zh');
