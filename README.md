@@ -183,8 +183,8 @@ agent 会回显类似：
 场景图统一按「国际数学建模竞赛优秀论文里的 Problem Background Illustration」出图，工具会自动拼上这段固定风格，不需要你写：
 
 > Academic monochrome technical illustration, minimalist architectural and engineering schematic drawing,
-> professional academic paper figure style. 纯白背景、黑白灰配色、纤细灰色线稿、二维矢量、正视图/平视、
-> 简化几何造型、轻微灰阴影、细引线标注；避免彩色、卡通、3D、写实、渐变、粗描边、复杂纹理。
+> professional academic paper figure style. 纯白背景、黑白灰配色、纤细灰色线稿、二维/三维矢量（Flat 2D/3D）、
+> 正视图/平视/正交视角、简化几何造型、轻微灰阴影、细引线标注；避免彩色、卡通、照片级 3D、写实、渐变、粗描边、复杂纹理。
 
 也就是说：场景图是**黑白灰的学术插图**，不是海报/插画。你（或技能）只需要按下面三段写内容：
 

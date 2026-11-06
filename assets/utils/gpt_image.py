@@ -9,8 +9,9 @@
 
 风格:
   场景图统一使用 MCM Academic Illustration 固定风格（纯白底、黑白灰、细灰线稿、
-  二维矢量、正视图、轻阴影、学术论文插图质感），并在提示词里给出 Avoid 清单；
-  你只需要写【场景主题】【场景元素】【构图要求】，不要自己写颜色/卡通/3D 等风格词。
+  二维/三维扁平矢量（Flat 2D/3D）、正视图/正交视角、轻阴影、学术论文插图质感），
+  并在提示词里给出 Avoid 清单；你只需要写【场景主题】【场景元素】【构图要求】，
+  不要自己写颜色/卡通/写实 等风格词。
 
 模型与兜底:
   默认按 gpt-image-2.5-sunburst → gpt-image-2 的顺序尝试；主模型不可用时自动退到兜底模型。
@@ -75,7 +76,7 @@ MCM_STYLE_BLOCK = (
     "- Pure white background with generous negative space.\n"
     "- Strict monochromatic grayscale palette: black, white, light gray and medium gray.\n"
     "- Thin, delicate, consistent gray outlines.\n"
-    "- Flat 2D vector-style rendering with subtle light-gray shading.\n"
+    "- Flat 2D/3D vector-style rendering with subtle light-gray shading.\n"
     "- Clean architectural elevation view, orthographic projection, straight-on perspective.\n"
     "- Simplified but structurally accurate buildings, infrastructure, landscapes and environmental elements.\n"
     "- Small human silhouettes and simplified trees for scale and context.\n"
@@ -83,7 +84,7 @@ MCM_STYLE_BLOCK = (
     "- Minimal visual hierarchy, elegant academic typography and subtle annotation leader lines.\n"
     "- Clean, sophisticated, publication-quality scientific illustration.\n"
     "- Similar to figures in international engineering research papers and mathematical modeling competition papers.\n"
-    "\n【Avoid】colorful graphics, cartoon style, 3D rendering, photorealism, gradients, heavy shadows, "
+    "\n【Avoid】colorful graphics, cartoon style, photorealistic 3D rendering, photorealism, gradients, heavy shadows, "
     "thick outlines, excessive decoration, complex textures and cluttered backgrounds.\n"
     "\n【构图】横向构图，主体分布合理、空间层次清晰，重点突出场景之间的关系；"
     "使用适当的标注和细引线说明重要元素。\n"

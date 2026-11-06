@@ -470,7 +470,7 @@ fi
 
 Claude must construct the prompt BASED ON THE FINAL methods/results from MODELING_REPORT.md (not the initial plan — methods may have changed during modeling/coding). **固定风格由工具统一注入**（黑白灰学术技术插图，见下），你只写场景内容，按【场景主题】【场景元素】【构图要求】三段组织。
 
-**⛔ 不要自己写颜色/风格/渲染方式。** 不要出现 "colorful / 卡通 / 3D / 写实 / 彩色 / 丰富配色 / 渐变" 这类词——工具会注入 Academic Monochrome Technical Illustration 固定风格，冲突描述会让出图跑偏。
+**⛔ 不要自己写颜色/风格/渲染方式。** 不要出现 "colorful / 卡通 / 写实照片 / 彩色 / 丰富配色 / 渐变" 这类词——工具会注入 Academic Monochrome Technical Illustration 固定风格，冲突描述会让出图跑偏。2D 和 3D 都可以，但必须是扁平矢量风格（Flat 2D/3D vector-style），不要写"照片级 3D / 写实渲染"。
 
 **GPT Image 只用于场景示意图（物理/工程类赛题的问题背景图）。技术路线图、求解流程图、模型架构图使用 DrawIO。**
 

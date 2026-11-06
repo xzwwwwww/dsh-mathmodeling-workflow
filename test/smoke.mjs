@@ -254,6 +254,7 @@ async function main() {
   check('场景图内置 MCM 学术插图固定风格',
     gptSrc.includes('Academic monochrome technical illustration')
       && gptSrc.includes('Strict monochromatic grayscale palette')
+      && gptSrc.includes('Flat 2D/3D vector-style rendering')
       && gptSrc.includes('Avoid'));
   check('场景图提示词模板含三段结构', gptSrc.includes('【场景主题】') && gptSrc.includes('【场景元素】') && gptSrc.includes('【构图要求】'));
   check('支持 --dry-run 预览最终提示词', gptSrc.includes('--dry-run'));

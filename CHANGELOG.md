@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- 场景图风格放开 3D：`Flat 2D vector-style rendering` → **`Flat 2D/3D vector-style rendering`**（扁平矢量 2D/3D 都允许），Avoid 清单里的 `3D rendering` 改为 `photorealistic 3D rendering`（仍禁止照片级写实 3D）。
+- 图表生成/赛题分析技能与 README 同步：不再笼统禁止 3D，只禁"写实/照片级 3D"。
+- smoke 断言补充 `Flat 2D/3D`。
 ## 0.3.5
 
 场景图（GPT Image 概念图）固定为数学建模竞赛论文风格：
