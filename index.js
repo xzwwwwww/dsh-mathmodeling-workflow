@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMPETITIONS, DEFAULT_SWITCHES, COMPETITION_KEYS, normalizeSwitches, summarizeSwitches } from './lib/switches.js';
+import { COMPETITIONS, DEFAULT_SWITCHES, COMPETITION_KEYS, normalizeSwitches, summarizeSwitches, perProblemFlowStyle } from './lib/switches.js';
 import { resolveSteps, stepDirName } from './lib/steps.js';
 import { scanInput, summarizeScan } from './lib/scan.js';
 import { scaffoldWorkspace, readSkillBody } from './lib/scaffold.js';
@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.3.10';
+const BUILD = '0.3.11';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -158,6 +158,18 @@ export function apply(ctx, config = {}) {
       const warnings = [];
       if (!scan.problemFiles.length) warnings.push('没检测到 PDF/DOCX 赛题文件，只找到文本/数据；请确认赛题原文在目录里');
       if (fontInfo.missing.length) warnings.push(`模板缺字体：${fontInfo.missing.join(', ')}（已写 _templates/FONTS_MISSING.md，编译前需补）`);
+      if (perProblemFlowStyle(switches) === 'gptimage') {
+        let hasGptKey = Boolean(process.env.GPT_IMAGE_API_KEY);
+        if (!hasGptKey) {
+          try {
+            const cfg = JSON.parse(await readFile(path.join(workspace, '_utils', '_gpt_image_config.json'), 'utf8'));
+            hasGptKey = Boolean(String(cfg.api_key ?? '').trim() || String(cfg.GPT_IMAGE_API_KEY ?? '').trim());
+          } catch {
+            hasGptKey = false;
+          }
+        }
+        if (!hasGptKey) warnings.push('逐问流程图选了 GPT Image，但没有配置 GPT_IMAGE_API_KEY / _utils/_gpt_image_config.json：这些图会被自动跳过（或改用 DrawIO）');
+      }
 
       const report = [
         `工作区已创建：${workspace}`,

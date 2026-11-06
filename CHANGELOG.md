@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.11
+
+- 初始化警告：逐问流程图选了 GPT Image 但没配置 key（环境变量或 `_utils/_gpt_image_config.json`）时，`modeling_init` 直接提示"这些图会被跳过"。
+- smoke 增加逐问框架图的闸门级回归：无 key 自动跳过、有 key 时缺图即失败。
+- 版本号 0.3.11。
 ## 0.3.10
 
 - 新增「逐问流程图」能力（默认关）：开关 `flow_per_problem`；开启后每个子问题各一张 `fig_flow_qN`。

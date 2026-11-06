@@ -320,6 +320,25 @@ async function main() {
     gptSrc.includes('Visual modeling framework diagram') && gptSrc.includes('graphical abstract style') && gptSrc.includes('"framework"'));
   const flowParsed = parseFigureManifest('<!-- BEGIN FIGURE_MANIFEST -->\n**逐问流程图（GPT Image）**\n- fig_flow_q1\n<!-- END FIGURE_MANIFEST -->');
   check('逐问流程图（GPT Image）章节归入 GPTIMG', (flowParsed?.GPTIMG ?? []).includes('fig_flow_q1'), JSON.stringify(flowParsed));
+  const flowWs = path.join(TMP, 'flow_ws');
+  await mkdir(path.join(flowWs, 'figures'), { recursive: true });
+  await writeFile(path.join(flowWs, 'PROBLEM_ANALYSIS.md'), [
+    '<!-- BEGIN FIGURE_MANIFEST -->',
+    '**数据图**',
+    '- fig_q1_trend',
+    '**逐问流程图（GPT Image）**',
+    '- fig_flow_q1',
+    '<!-- END FIGURE_MANIFEST -->',
+  ].join('\n'), 'utf8');
+  await writeFile(path.join(flowWs, 'figures', 'fig_q1_trend.pdf'), 'pdf', 'utf8');
+  const flowNoKey = await gateFigures(flowWs, { key: 'paper-figure', gates: ['figures'] });
+  check('逐问框架图无 key 自动跳过', flowNoKey.ok === true && (flowNoKey.detail.gptImgSkipped ?? []).includes('fig_flow_q1'),
+    JSON.stringify(flowNoKey.detail.gptImgSkipped));
+  process.env.GPT_IMAGE_API_KEY = 'test-key';
+  const flowKey = await gateFigures(flowWs, { key: 'paper-figure', gates: ['figures'] });
+  delete process.env.GPT_IMAGE_API_KEY;
+  check('有 key 时逐问框架图纳入对账', flowKey.ok === false && flowKey.detail.missing.includes('fig_flow_q1'),
+    JSON.stringify(flowKey.detail.missing));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;
