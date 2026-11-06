@@ -52,7 +52,7 @@ echo "出图工具 CAPTURE=$CAPTURE"
 
 # HTML/PDF 质检脚本（优先 _utils/，回退 _templates/、skill 源目录）
 HTMLCHECK=""
-for f in _utils/html_pdf_check.py _templates/html_pdf_check.py skills/流程图绘制HTML/tools/html_pdf_check.py; do
+for f in tools/html_pdf_check.py skills/流程图绘制HTML/tools/html_pdf_check.py; do
   [ -f "$f" ] && { HTMLCHECK="$f"; break; }
 done
 echo "质检脚本 HTMLCHECK=$HTMLCHECK"

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.9
+
+全流程自检（真实 8 步模拟跑通）后修的问题：
+
+- `modeling_next` 重复调用同一步不再重复计次（之前"重读 prompt"会把 attempts 抬到 2）。
+- `modeling_finish` 通过分支的 report 之前是数组（工具输出变成 JSON），改为字符串。
+- `modeling_finish` 对已完成步骤直接返回"已验收通过"，不再重跑闸门导致回退；传错 step key 现在给出可用 key 列表。
+- `modeling_switches` 在步骤 running/waiting 时拒绝改开关（之前会把运行中步骤重置为 pending、丢掉提问状态），并区分"运行中"与"已完成"两种提示。
+- 步骤阈值与技能对齐：建模报告 3000→1500 B（技能要求 1.5KB）；编程实现 800→1000 B；逻辑对抗复核 100→50 B（零问题 JSON 可能只有 80 B）。
+- 编程实现步新增二级产物 `figures/*.json`（技能强制要求；缺它会让论文数据核对全部对不上）。
+- 新增 `_utils/figure_pdf_quality_check.py`（自然风格图表技能引用了但之前缺失）：检查 PDF 头/页数/页面尺寸/宽高比，并核对 `\includegraphics` 引用的图是否存在、宽度是否过小。
+- 流程图 HTML 技能里不存在的 `_utils/html_pdf_check.py` 路径改为只用技能自带 `tools/html_pdf_check.py`。
+- `modeling_ask` 的 question/options 做 trim（避免空白选项混进问题表）。
+- 初始化默认工作区名的时间戳精确到分钟（之前同目录同小时会撞名）。
+- 等待回答的步骤在进度行显示 ⏸（之前显示 ?）。
+- smoke 新增：8 步闸门串联、技能引用 `_utils` 脚本存在性、编程步结果 JSON 要求、机理图章节归类等回归用例。
 ## 0.3.8
 
 - 修机理图进闸门的一个漏洞：manifest 标题写成「**机理示意图**」时，章节关键词只匹配「机理图/机制示意」等，会被归到 OTHER 而**静默不计入对账**（有 key 时漏检、缺图也不报错）。新增关键词「机理示意」，并补回归测试：章节归类、无 key 自动跳过、有 key 时必须产出。

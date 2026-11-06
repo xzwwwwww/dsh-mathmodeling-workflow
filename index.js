@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.3.8';
+const BUILD = '0.3.9';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -68,7 +68,7 @@ function stepView(step, state) {
 }
 
 function progressLines(state) {
-  const marks = { pending: '·', running: '▶', blocked: '!', completed: '✓' };
+  const marks = { pending: '·', running: '▶', waiting: '⏸', blocked: '!', completed: '✓' };
   return state.steps.map((s, i) => `${String(i + 1).padStart(2, '0')} ${marks[s.status] ?? '?'} ${s.title}（${s.key}）→ ${s.primaryOutput}`).join('\n');
 }
 
@@ -128,7 +128,7 @@ export function apply(ctx, config = {}) {
       const { switches, errors } = normalizeSwitches(args);
       if (errors.length) throw new Error(errors.join('；'));
 
-      const stamp = new Date().toISOString().slice(0, 13).replace(/[:T]/g, '');
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
       const defaultName = `modeling-${path.basename(inputDir).replace(/[^\w\u4e00-\u9fff-]+/g, '_')}-${stamp}`;
       const workspaceName = String(args.workspace_name ?? defaultName);
       const workspace = path.join(base, workspaceName);
@@ -229,8 +229,10 @@ export function apply(ctx, config = {}) {
       const promptPath = path.join(workspace, step.promptPath);
       await writeFile(promptPath, prompt, 'utf8');
 
+      // 同一步重复调 modeling_next（比如重读 prompt）不重复计次；只有新派发/失败重派才算一次尝试
+      const alreadyRunning = step.status === 'running' && (step.attempts ?? 0) > 0;
       step.status = 'running';
-      step.attempts = (step.attempts ?? 0) + 1;
+      if (!alreadyRunning) step.attempts = (step.attempts ?? 0) + 1;
       step.startedAt = step.startedAt ?? new Date().toISOString();
       state.updatedAt = new Date().toISOString();
       await writeState(workspace, state);
@@ -294,7 +296,19 @@ export function apply(ctx, config = {}) {
 
       const key = args.step ? String(args.step) : null;
       const step = key ? state.steps.find((s) => s.key === key) : nextPendingStep(state);
-      if (!step) return { report: '没有可验收的步骤（全部已完成）。', pass: true, done: true, next: null };
+      if (!step) {
+        if (key) throw new Error(`工作区里没有步骤 ${key}；可用：${state.steps.map((s) => s.key).join(', ')}`);
+        return { report: '没有可验收的步骤（全部已完成）。', pass: true, done: true, next: null };
+      }
+      if (step.status === 'completed') {
+        const after = nextPendingStep(state);
+        return {
+          report: `第 ${step.order + 1} 步「${step.title}」已经验收通过，无需重复验收。${after ? `下一步：${after.title}（${after.key}）→ 调 modeling_next` : '全部步骤已完成 → 调 modeling_status 汇报。'}`,
+          pass: true,
+          done: !after,
+          next: after ? { step: after.key, title: after.title, promptPath: after.promptPath } : null,
+        };
+      }
 
       // 子代理提交了问题还没回答：先走「问用户 → 回答 → 回传」的闭环，不要越过它验产物
       const pending = openQuestions(state, step.key);
@@ -335,13 +349,14 @@ export function apply(ctx, config = {}) {
         return `${mark} ${r.gate}: ${JSON.stringify(r.detail)}`;
       });
 
-      const summary = report.ok
+      const summary = (report.ok
         ? [
             `✅ 第 ${step.order + 1} 步「${step.title}」通过验收。`,
             ...lines,
             next ? `下一步：${next.title}（${next.step}）→ 调 modeling_next` : '全部步骤已完成 → 调 modeling_status 汇报。',
           ]
-        : [`❌ 第 ${step.order + 1} 步「${step.title}」未通过：`, ...lines, '', '修复指引（派发下一次时附上）：', ...report.hints.map((h) => `- ${h}`)].join('\n');
+        : [`❌ 第 ${step.order + 1} 步「${step.title}」未通过：`, ...lines, '', '修复指引（派发下一次时附上）：', ...report.hints.map((h) => `- ${h}`)]
+      ).join('\n');
 
       return {
         report: summary,
@@ -382,8 +397,8 @@ export function apply(ctx, config = {}) {
       if (!step) throw new Error('没有执行中的步骤，无法登记问题');
       const item = addQuestion(state, {
         step: step.key,
-        question: String(args.question),
-        options: args.options ?? [],
+        question: String(args.question).trim(),
+        options: (args.options ?? []).map((o) => String(o).trim()).filter(Boolean),
       });
       step.status = 'waiting';
       state.updatedAt = new Date().toISOString();
@@ -535,8 +550,13 @@ export function apply(ctx, config = {}) {
       const base = await cwd(exec);
       const workspace = resolvePath(base, String(args.workspace));
       const state = await requireState(workspace);
-      if (state.steps.some((s) => s.status === 'completed')) {
-        throw new Error('已有步骤完成，不能改开关（改步骤集合会让索引错位）。请新建工作区。');
+      const running = state.steps.filter((s) => s.status === 'running' || s.status === 'waiting');
+      if (running.length) {
+        throw new Error(`有步骤正在执行或等待回答（${running.map((s) => s.key).join(', ')}），不能改开关：重解析步骤集合会让运行中的步骤/问题错位。请先结束该步或新建工作区。`);
+      }
+      const completed = state.steps.filter((s) => s.status === 'completed');
+      if (completed.length) {
+        throw new Error(`已有步骤完成（${completed.map((s) => s.key).join(', ')}），不能改开关（改步骤集合会让索引错位）。请新建工作区。`);
       }
       const { switches, errors } = normalizeSwitches({ ...state.switches, ...(args.switches ?? {}) });
       if (errors.length) throw new Error(errors.join('；'));

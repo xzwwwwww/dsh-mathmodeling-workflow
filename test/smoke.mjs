@@ -1,5 +1,5 @@
 // 离线冒烟测试：不依赖 Cordis 运行时，直接验证 scaffold / prompt / gates 三条主链。
-import { mkdir, rm, writeFile, readFile, stat } from 'node:fs/promises';
+import { mkdir, rm, writeFile, readFile, stat, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -286,6 +286,23 @@ async function main() {
   check('机理图模板含【主题】【内容要求】且支持 --style',
     gptSrc.includes('【主题】') && gptSrc.includes('【内容要求】') && gptSrc.includes('--style'));
   check('支持 --dry-run 预览最终提示词', gptSrc.includes('--dry-run'));
+
+  // 15) 技能引用的 _utils 脚本必须真实存在（防止技能文档指向缺失工具）
+  const skillFiles = await readdir(path.join(ASSETS, 'skills'), { recursive: true });
+  const missingUtils = new Set();
+  for (const rel of skillFiles) {
+    if (!rel.endsWith('.md')) continue;
+    const text = await readFile(path.join(ASSETS, 'skills', rel), 'utf8');
+    for (const m of text.matchAll(/_utils\/([A-Za-z0-9_.-]+\.(?:py|sh))/g)) {
+      if (!existsSync(path.join(ASSETS, 'utils', m[1]))) missingUtils.add(m[1]);
+    }
+  }
+  check('技能引用的 _utils 脚本都存在', missingUtils.size === 0, [...missingUtils].join(', '));
+
+  // 16) 编程实现步必须要求结果 JSON（论文数据核对依赖它）
+  const codeStep = state.steps.find((s) => s.key === 'comp-code');
+  check('编程实现步要求 figures/*.json', codeStep.companions.includes('figures/*.json'));
+  check('数据图质量检查脚本随包提供', existsSync(path.join(ASSETS, 'utils', 'figure_pdf_quality_check.py')));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;
