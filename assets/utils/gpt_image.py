@@ -9,13 +9,15 @@
   python _utils/gpt_image.py --style mechanism --prompt "..." --output figures/fig_mechanism.png
 
 风格:
-  两种固定风格由工具注入，调用方只写内容：
+  三种固定风格由工具注入，调用方只写内容：
   - scene（默认）：场景图/问题背景图 —— 黑白灰技术插图（纯白底、黑/白/灰、细灰线稿、
     二维/三维扁平矢量、正视图/正交视角、轻阴影、学术论文插图质感）；
   - mechanism：机理图/系统机制示意图 —— 低饱和粉彩学术示意图（白底、pastel 配色、
-    圆角矩形模块、细箭头连接、中心节点层次、必要公式与变量、扁平 2D 矢量、论文级排版）。
-  你只需要写【场景主题】【场景元素】【构图要求】（scene）或【主题】【内容要求】（mechanism），
-  不要自己写颜色/卡通/写实 等风格词。
+    圆角矩形模块、细箭头连接、中心节点层次、必要公式与变量、扁平 2D 矢量、论文级排版）；
+  - framework：逐问建模框架图/叙事型流程图 —— 低饱和 pastel 卡片式信息图（graphical abstract、
+    中间核心模型、四周输入/对比/输出面板、图标与迷你图表、扁平 2D 矢量、论文级排版）。
+  你只需要写【场景主题】【场景元素】【构图要求】（scene）、【主题】【内容要求】（mechanism）
+  或【主题】【结构要求】（framework），不要自己写颜色/卡通/写实 等风格词。
 
 模型与兜底:
   默认按 gpt-image-2.5-sunburst → gpt-image-2 的顺序尝试；主模型不可用时自动退到兜底模型。
@@ -126,6 +128,37 @@ MECH_STYLE_BLOCK = (
     "\n【输出】High-resolution, publication-quality mechanism diagram, suitable for MCM/ICM paper figures."
 )
 
+# ---------- 逐问建模框架图（framework） ----------
+FRAMEWORK_TASK_ZH = (
+    "请绘制一张用于数学建模竞赛论文的可视化建模框架图（graphical abstract / 建模框架总图）。\n"
+    "画面内容按下方【主题】【结构要求】组织；风格必须严格符合后面的【固定风格】。\n\n"
+)
+
+FRAMEWORK_TASK_EN = (
+    "Draw a visual modeling framework diagram (graphical abstract) for a mathematical modeling competition paper. "
+    "Follow the theme and structure requirements below, and strictly follow the fixed style block.\n\n"
+)
+
+FRAMEWORK_STYLE_BLOCK = (
+    "\n\n【固定风格｜Visual Modeling Framework Diagram】\n"
+    "Visual modeling framework diagram, graphical abstract style, elegant academic infographic for a mathematical modeling paper.\n"
+    "- Clean white background with generous whitespace.\n"
+    "- Soft pastel color palette with low saturation, including pale blue, pale green, beige, and light pink.\n"
+    "- Multi-panel card-based layout with rounded rectangles and subtle borders.\n"
+    "- Integrate visual elements such as small illustrations, icons, mini line charts, maps, equations, and arrows.\n"
+    "- Highlight the central model or core function block in the middle.\n"
+    "- Use arrows and directional connectors to show data flow, causality, comparison, and transformation.\n"
+    "- Include \"before vs after\", \"input vs output\", or \"multi-scenario comparison\" panels when appropriate.\n"
+    "- Flat 2D vector style, clean geometry, publication-quality academic layout.\n"
+    "- Information-rich but visually clear and balanced.\n"
+    "- Similar to a high-quality graphical abstract or framework figure in an international scientific paper.\n"
+    "\n【Avoid】bright saturated colors, cartoon exaggeration, messy layout, thick borders, overly decorative elements, "
+    "3D rendering, photorealism, cluttered backgrounds.\n"
+    "\n【布局】中间突出核心模型/核心函数模块，周围放置输入场景、影响因素、参数变化、对比案例与输出结果；"
+    "圆角卡片式布局，细箭头连接，层次清晰。\n"
+    "\n【输出】high-resolution, publication-quality infographic flowchart suitable for MCM/ICM papers, horizontal 16:9 composition."
+)
+
 # 兼容旧变量名（build_prompt 之外若有脚本引用）
 ZH_LANG_PREFIX = MCM_TASK_ZH
 EN_LANG_PREFIX = MCM_TASK_EN
@@ -194,13 +227,17 @@ def build_prompt(user_prompt: str, lang: str, style: str = "scene") -> str:
 
     style:
       - scene（默认）：场景图/问题背景图，黑白灰技术插图；
-      - mechanism：机理图/系统机制示意图，低饱和粉彩学术示意图。
+      - mechanism：机理图/系统机制示意图，低饱和粉彩学术示意图；
+      - framework：逐问建模框架图/叙事型流程图，低饱和 pastel 卡片式信息图。
     内容由调用方（图表生成技能）组织：scene 用【场景主题】【场景元素】【构图要求】，
-    mechanism 用【主题】【内容要求】；风格由本函数统一注入。
+    mechanism 用【主题】【内容要求】，framework 用【主题】【结构要求】；风格由本函数统一注入。
     """
     if style == "mechanism":
         prefix = MECH_TASK_ZH if lang == "zh" else MECH_TASK_EN
         block = MECH_STYLE_BLOCK
+    elif style == "framework":
+        prefix = FRAMEWORK_TASK_ZH if lang == "zh" else FRAMEWORK_TASK_EN
+        block = FRAMEWORK_STYLE_BLOCK
     else:
         prefix = MCM_TASK_ZH if lang == "zh" else MCM_TASK_EN
         block = MCM_STYLE_BLOCK
@@ -410,7 +447,7 @@ def main():
         help="覆盖模型链，逗号分隔（默认 %s；只给一个则不做兜底）" % ",".join(DEFAULT_IMAGE_MODELS),
     )
     parser.add_argument("--max-retries", type=int, default=3, help="每个模型的最大重试次数（默认 3）")
-    parser.add_argument("--style", choices=["scene", "mechanism"], default="scene", help="固定风格：scene=场景图（黑白灰技术插图，默认）；mechanism=机理图（低饱和粉彩学术示意图）")
+    parser.add_argument("--style", choices=["scene", "mechanism", "framework"], default="scene", help="固定风格：scene=场景图（黑白灰技术插图，默认）；mechanism=机理图（低饱和粉彩机制示意图）；framework=逐问建模框架图（graphical abstract，低饱和卡片式信息图）")
     parser.add_argument("--dry-run", action="store_true", help="只打印最终提示词（含固定风格），不调用 API")
     args = parser.parse_args()
 

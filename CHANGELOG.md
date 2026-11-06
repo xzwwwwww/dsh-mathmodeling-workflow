@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.10
+
+- 新增「逐问流程图」能力（默认关）：开关 `flow_per_problem`；开启后每个子问题各一张 `fig_flow_qN`。
+- 画法由自定义要求决定（`perProblemFlowStyle`）：`custom_requirements` 里同时出现 image/gpt/生图 与 流程图 → GPT Image；否则 DrawIO。
+- 新增 GPT Image 固定风格 `--style framework`（Visual Modeling Framework Diagram / graphical abstract：白底、低饱和 pastel、卡片式模块、中间核心模型、四周输入/对比/输出面板、图标与迷你图表、扁平 2D）。
+- CLAUDE.md 写入 `MMW_FLOW_PER_PROBLEM=1` 与 `MMW_PER_PROBLEM_FLOW_STYLE=gptimage|drawio` 标记，并说明逐问流程的画法与来源。
+- 赛题分析技能：逐问流程标记分流（DrawIO 段 vs `**逐问流程图（GPT Image）**` 段），`fig_flow_q` 计入 GPTIMG 统计。
+- 图表生成技能：新增 framework 模板（只在标记为 gptimage 时生成），`fig_flow_q*` 纳入 GPT Image 对账/统计/质检跳过规则。
+- README：开关表 +「逐问建模框架图」小节；smoke 增加标记、判定、章节归类与风格块断言。
 ## 0.3.9
 
 全流程自检（真实 8 步模拟跑通）后修的问题：

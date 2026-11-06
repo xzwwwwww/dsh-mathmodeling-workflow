@@ -82,7 +82,7 @@ git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 
 agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国赛A-<时间戳>/`。
 
-### 4. 开关一览（19 个）
+### 4. 开关一览（20 个）
 
 | 开关 | 取值 | 默认 | 用途 |
 |---|---|---|---|
@@ -100,6 +100,7 @@ agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国�
 | `comp_date_start` / `comp_date_end` | `YYYY-MM-DD` | 空 | 仅 `ai_disclosure=used` 用于生成比赛期内的交互日期 |
 | `skip_figures` | true / false | `false` | 跳过两个图表步 |
 | `skip_drawio` | true / false | `false` | 只跳过流程图步 |
+| `flow_per_problem` | true / false | `false` | 逐问流程图：开 → 每个子问题各画一张 `fig_flow_qN`；具体用 GPT Image 还是 DrawIO 由 `custom_requirements` 决定（写明 image/gpt/生图 用 GPT Image，否则 DrawIO） |
 | `min_figures` / `min_tables` / `min_models` | 整数 或 `auto` | `auto` | 数量下限参考，写进 CLAUDE.md 供技能自检 |
 | `custom_requirements` | 自由文本 | 空 | 自定义要求（导师规范、必须包含的内容），最高优先级，会进 CLAUDE.md |
 
@@ -228,6 +229,48 @@ python _utils/gpt_image.py --style mechanism \
 ```
 
 同样可以先用 `--dry-run --style mechanism` 看最终提示词。
+
+### 逐问建模框架图：Visual Modeling Framework Diagram
+
+当你想给**每个子问题**都配一张「叙事型流程图」（graphical abstract：中间核心模型、四周输入/对比/输出面板、卡片式布局），可以用 GPT Image 的 framework 风格。它是**逐问**的，默认关闭——避免论文塞进一堆同质化框图。
+
+**只有同时满足两个条件才会规划：**
+
+1. `flow_per_problem: true`（开启「每问都规划流程图」）；
+2. `custom_requirements` 里**明确写了用 image**，例如：
+
+```text
+自定义要求：每问的流程图请用 image 生成，不要用 DrawIO。
+```
+
+判据是「自定义要求里同时出现 image/gpt/生图 这类词 + 流程图」，否则逐问流程图仍由 DrawIO 画。
+
+风格由工具统一注入（`--style framework`）：
+
+> Visual modeling framework diagram, graphical abstract style, elegant academic infographic.
+> 纯白背景、低饱和 pastel、卡片式圆角模块、中间核心模型、四周输入/对比/输出面板、
+> 图标与迷你图表、细箭头、扁平 2D 矢量、论文级排版；避免鲜艳饱和色、卡通、杂乱、粗边框、照片级 3D。
+
+你只需要写内容：
+
+```text
+【主题】洪水风险传播
+【结构要求】
+• 整体采用信息图式流程图 / graphical abstract 风格；
+• 中间突出核心模型或核心函数模块；
+• 周围展示不同输入场景、影响因素、参数变化、对比案例或输出结果；
+• 使用箭头表示变量传递、模型作用、因果关系和前后变化；
+• 适当加入地图、小图标、小曲线图、公式、前后对比面板；
+• 各模块使用圆角卡片式布局，整体清晰、整洁、层次明确。
+```
+
+```bash
+python _utils/gpt_image.py --style framework \
+  --prompt "…【主题】【结构要求】…" \
+  --output figures/fig_flow_q1.png --lang zh
+```
+
+出图前同样可以 `--dry-run --style framework` 先看最终提示词。
 
 如果你自己有 ChatGPT 账号，也可以直接拉 Codex CLI，用它内置的 image gen 出图（本仓库的插件图标就是这么生成的）：
 

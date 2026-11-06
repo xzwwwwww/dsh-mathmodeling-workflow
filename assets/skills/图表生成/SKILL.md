@@ -534,6 +534,34 @@ Claude must construct the prompt BASED ON THE FINAL methods/results from MODELIN
 - 不生成真人面孔/肖像；不要写具体颜色值（风格已固定为低饱和 pastel）
 - 出图前先 `--dry-run --style mechanism` 检查最终提示词
 
+#### 逐问建模框架图 (fig_flow_qN.png)
+
+**只在 CLAUDE.md 同时含 `MMW_FLOW_PER_PROBLEM=1` 与 `MMW_PER_PROBLEM_FLOW_STYLE=gptimage` 时才做。**
+此时 manifest 里的 `fig_flow_qN` 在「**逐问流程图（GPT Image）**」章节（GPTIMG 类），每题一张，用
+`--style framework` 出图（叙事型建模框架图 / graphical abstract），不是 DrawIO 流程图。
+
+按下面格式写 `--prompt`（**必须加 `--style framework`**）：
+
+```
+请绘制一张用于数学建模竞赛论文的可视化建模框架图。
+【主题】
+<例如：旅游承载力评估 / 洪水风险传播 / 交通调度优化 / 城市热岛治理 / 森林火灾响应 / 供应链鲁棒优化>
+【结构要求】
+• 整体采用信息图式流程图 / graphical abstract 风格；
+• 中间突出核心模型或核心函数模块；
+• 周围展示不同输入场景、影响因素、参数变化、对比案例或输出结果；
+• 使用箭头表示变量传递、模型作用、因果关系和前后变化；
+• 适当加入地图、小图标、小曲线图、公式、前后对比面板；
+• 各模块使用圆角卡片式布局，整体清晰、整洁、层次明确。
+```
+
+⛔ 约束：
+- 一题一张，`fig_flow_q1`、`fig_flow_q2`… 与子问题编号一一对应
+- 中间必须是本题的核心模型/函数，四周是本题的输入与输出，不要画成通用模板
+- 文字用简体中文（`--lang zh`），公式只放本题核心 1-2 个
+- 出图前先 `--dry-run --style framework` 检查最终提示词
+- 命名与 DrawIO 逐问流程图同为 `fig_flow_qN`：manifest 里只出现在 GPT Image 段，不要同时在 DrawIO 段重复规划
+
 </gpt_image_prompt_templates>
 
 **6. Execute GPT Image calls (max 3 retries per figure, handled by the tool):**
@@ -614,7 +642,7 @@ Status meanings:
 
 对每张成功生成的 GPT Image 图，检查：
 ```bash
-for img in figures/fig_scene*.pdf figures/fig_mechanism*.pdf figures/fig_gptimg*.pdf; do
+for img in figures/fig_scene*.pdf figures/fig_mechanism*.pdf figures/fig_flow_q*.pdf figures/fig_gptimg*.pdf; do
     [ -f "$img" ] || continue
     bn=$(basename "$img")
     sz=$(wc -c < "$img")
@@ -991,7 +1019,7 @@ else
   #    又会误收流程图 → 用数据图 PROMPT 检流程图/插画会得到牛头不对马嘴的反馈、误导修图）。
   #    数据图 = matplotlib gen_fig 脚本产的；流程/架构图有同名 .drawio（归 流程图绘制 的
   #    vision，已单独质检，本步不重复检）；TikZ 有同名 .tex 含 tikzpicture；GPT Image 插画是
-  #    fig_scene*/fig_mechanism*/fig_gptimg*（AI 生成的场景图，非数据图）。判据：
+  #    fig_scene*/fig_mechanism*/fig_flow_q*/fig_gptimg*（AI 生成的场景图，非数据图）。判据：
   #      正向铁证：存在同名 gen_fig 脚本（规范 one gen_fig script per figure）→ 一定是数据图
   #      负向兜底：无 .drawio、无 tikz .tex、非 GPT 前缀 → 可能是「一脚本产多图」的数据图，也检
   DF_LIST=""
@@ -1008,7 +1036,7 @@ else
       _skip=0
       [ -f "figures/${bn}.drawio" ] && _skip=1
       [ -f "figures/${bn}.tex" ] && grep -q '\\begin{tikzpicture}' "figures/${bn}.tex" 2>/dev/null && _skip=1
-      case "$bn" in fig_scene*|fig_mechanism*|fig_gptimg*) _skip=1 ;; esac
+      case "$bn" in fig_scene*|fig_mechanism*|fig_flow_q*|fig_gptimg*) _skip=1 ;; esac
       [ "$_skip" = "0" ] && is_data=1
     fi
     [ "$is_data" = "1" ] && DF_LIST="$DF_LIST $pdf"
@@ -1413,7 +1441,7 @@ echo "  (TikZ/DrawIO diagrams will be generated and validated by the next step: 
 # 4.6 GPT Image figures (if planned)
 GPTIMG_PLANNED=$(grep -ci 'GPTIMG\|GPT.Image\|场景示意' PROBLEM_ANALYSIS.md 2>/dev/null || echo 0)
 if [ "$GPTIMG_PLANNED" -gt 0 ]; then
-    GPTIMG_PDF=$(ls figures/fig_scene*.pdf figures/fig_mechanism*.pdf figures/fig_gptimg*.pdf 2>/dev/null | wc -l)
+    GPTIMG_PDF=$(ls figures/fig_scene*.pdf figures/fig_mechanism*.pdf figures/fig_flow_q*.pdf figures/fig_gptimg*.pdf 2>/dev/null | wc -l)
     if [ "$GPTIMG_PDF" -gt 0 ]; then
         echo "✅ GPT Image figures: $GPTIMG_PDF PDFs"
     else

@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.3.9';
+const BUILD = '0.3.10';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -111,6 +111,7 @@ export function apply(ctx, config = {}) {
         enable_comp_review: { type: 'boolean', description: '是否插入「逻辑对抗复核」步骤（默认开；传 false 可省一次子代理调用）' },
         skip_figures: { type: 'boolean', description: '跳过两个图表步骤' },
         skip_drawio: { type: 'boolean', description: '只跳过流程图步骤' },
+        flow_per_problem: { type: 'boolean', description: '逐问流程图：开 → 每个子问题各规划一张 fig_flow_qN（默认关，避免同质化框图）。画法由 custom_requirements 决定：写明 image/gpt/生图 则用 GPT Image --style framework，否则用 DrawIO' },
         min_figures: { type: ['number', 'string'], description: '最少数据图张数，或 auto' },
         min_tables: { type: ['number', 'string'], description: '最少表格数，或 auto' },
         min_models: { type: ['number', 'string'], description: '最少模型数，或 auto' },

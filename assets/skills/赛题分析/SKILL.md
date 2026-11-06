@@ -541,18 +541,27 @@ ls _utils/figure_recipes_*.md 2>/dev/null || ls skills/shared-scripts/figure_rec
 整体求解思路已由上面的技术路线图承载；再给每问各配一张流程图会让论文塞进 N 张结构相似的
 "读数据→建模→求解"框图，占版面、同质化、拉低观感。**此时清单里不要出现任何 `fig_flow_q*`。**
 
-仅当 CLAUDE.md 含 `MMW_FLOW_PER_PROBLEM=1`（用户在前端显式开启「每个问题都画流程图」）时，
-才按下面逐问规划，有几个子问题就规划几张、一一对应：
-- DrawIO-2: 问题一求解流程图 → fig_flow_q1.drawio → 问题一章节开头
-- DrawIO-3: 问题二求解流程图 → fig_flow_q2.drawio → 问题二章节开头
-- DrawIO-4: 问题三求解流程图 → fig_flow_q3.drawio → 问题三章节开头
-- ...（一一对应）
+仅当 CLAUDE.md 含 `MMW_FLOW_PER_PROBLEM=1`（用户显式开启「每个问题都画流程图」）时，才逐问规划，
+有几个子问题就规划几张、一一对应。**画法由 `MMW_PER_PROBLEM_FLOW_STYLE` 决定：**
+
+- `MMW_PER_PROBLEM_FLOW_STYLE=drawio`（默认）→ 放进 DrawIO 清单：
+  - DrawIO-2: 问题一求解流程图 → fig_flow_q1.drawio → 问题一章节开头
+  - DrawIO-3: 问题二求解流程图 → fig_flow_q2.drawio → 问题二章节开头
+- `MMW_PER_PROBLEM_FLOW_STYLE=gptimage`（用户自定义要求里点名 image 时）→ 放进 **GPT Image** 清单，
+  章节标题写成 `**逐问流程图（GPT Image）**`，出图用 `--style framework`（Visual Modeling Framework Diagram）：
+  - GPTIMG-3: 问题一求解框架图 → fig_flow_q1 → 问题一章节开头
+  - GPTIMG-4: 问题二求解框架图 → fig_flow_q2 → 问题二章节开头
+- 两种风格不要混：同一份清单里 `fig_flow_q*` 要么全在 DrawIO 段、要么全在 GPT Image 段。
 
 判断方法（写清单前先跑）：
 ```bash
-grep -q 'MMW_FLOW_PER_PROBLEM=1' CLAUDE.md 2>/dev/null \
-  && echo "每问各一张流程图（用户已开启）" \
-  || echo "只画技术路线图，不规划 fig_flow_q*（默认）"
+STYLE="none"
+grep -q 'MMW_FLOW_PER_PROBLEM=1' CLAUDE.md 2>/dev/null && STYLE=$(grep -o 'MMW_PER_PROBLEM_FLOW_STYLE=[a-z]*' CLAUDE.md | cut -d= -f2)
+case "$STYLE" in
+  drawio)   echo "逐问流程图：DrawIO → 写 DrawIO-2/3/… fig_flow_q*.drawio" ;;
+  gptimage) echo "逐问流程图：GPT Image --style framework → 写 **逐问流程图（GPT Image）** 章节 fig_flow_q*" ;;
+  *)        echo "不规划 fig_flow_q*（默认）" ;;
+esac
 ```
 
 按需规划（根据赛题特征判断，写明理由）：
@@ -633,7 +642,7 @@ grep -q 'MMW_FLOW_PER_PROBLEM=1' CLAUDE.md 2>/dev/null \
 
 DrawIO 图（技术路线图/流程图/Pipeline/指标体系/决策树/甘特图/网络图）：
 - DrawIO-1: 技术路线图 → fig_roadmap.drawio → 问题重述章节末尾 (1_restatement.tex) [必须]
-- DrawIO-2: 问题一求解流程图 → fig_flow_q1.drawio → 问题一章节开头 [⛔ 默认不写此条；仅 CLAUDE.md 有 `MMW_FLOW_PER_PROBLEM=1` 时才逐问列出]
+- DrawIO-2: 问题一求解流程图 → fig_flow_q1.drawio → 问题一章节开头 [⛔ 默认不写此条；仅 CLAUDE.md 有 `MMW_FLOW_PER_PROBLEM=1` 且 `MMW_PER_PROBLEM_FLOW_STYLE=drawio` 时才逐问列出]
 - DrawIO-3: 指标体系层次图 → fig_index_hierarchy.drawio → 模型构建章节 [评价类必须]
 - DrawIO-4: 数据处理Pipeline → fig_pipeline.drawio → 数据预处理章节 [按需]
 - DrawIO-5: 模型选择决策树 → fig_model_decision.drawio → 模型构建章节 [按需]
@@ -644,13 +653,17 @@ DrawIO 图（技术路线图/流程图/Pipeline/指标体系/决策树/甘特图
 TikZ 图（模型架构图/变量关系图/算法流程图/几何示意图，需要精确连线或公式）：
 - TikZ-1: [图类型] → tikz_diagrams.tex → [章节位置] [按需]
 
-GPT Image 图（两种：场景图 / 机理图）：
+GPT Image 图（三种：场景图 / 机理图 / 逐问框架图）：
 - GPTIMG-1: {场景名}示意图 → fig_scene.png → 问题重述章节 (1_restatement.tex) [按需]
   （出图会统一套用 MCM Academic Illustration 风格：纯白底、黑白灰、细线稿、正视图、学术论文插图；
   规划时只需说明场景主题/元素/构图，不要写"彩色、卡通、写实、照片级 3D"这类风格词）
 - GPTIMG-2: {系统名}机理示意图 → fig_mechanism.png → 问题分析/模型建立章节 [按需]
   （出图套用 Scientific Mechanism Diagram 风格：白底、低饱和粉彩、圆角矩形模块、细箭头、2D 矢量、论文级排版；
   规划时说明【主题】【内容要求】，可选关键词：热网络示意图/紧凑模块化布局/方程式整合信息图/清晰流线箭头）
+- GPTIMG-3: 问题N求解框架图 → fig_flow_qN.png → 问题N章节开头 [⛔ 默认不写此条；仅 CLAUDE.md 同时含
+  `MMW_FLOW_PER_PROBLEM=1` 与 `MMW_PER_PROBLEM_FLOW_STYLE=gptimage` 时逐问列出]
+  （出图套用 Visual Modeling Framework Diagram 风格：白底、低饱和 pastel、卡片式模块、
+  中间核心模型、四周输入/对比/输出面板、图标与迷你图表、扁平 2D 矢量；规划时说明【主题】【结构要求】）
 
 总计: N 张 DrawIO + P 张 TikZ + M 张 GPT Image
 ```
@@ -702,7 +715,7 @@ else
   MANIFEST=$(sed -n "${START},${END}p" PROBLEM_ANALYSIS.md)
   # (原 ALL_FIGS 变量已移除：改用与完成铁律块一致的 DATA= 标记法后不再需要 fig_ 总数做减法)
   N_DRAWIO=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+fig_(roadmap|flow_|pipeline|index_|gantt|network|framework|model_decision)')
-  N_GPTIMG=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+(fig_scene|fig_mechanism)')
+  N_GPTIMG=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+(fig_scene|fig_mechanism|fig_flow_q)')
   N_TIKZ=$(echo "$MANIFEST" | grep -cE '^[[:space:]]*-[[:space:]]+tikz_')
   # ⛔ 数据图计数口径必须与「完成铁律」块(本文件开头 PASS 块)完全一致：优先取 DATA=N 标记，
   #    取不到再数 "**数据图**" 章节内的 - fig_ 行。之前这里用 ALL_FIGS-N_DRAWIO-N_GPTIMG 的减法

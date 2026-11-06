@@ -4,11 +4,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { normalizeSwitches, summarizeSwitches, COMPETITION_KEYS } from '../lib/switches.js';
+import { normalizeSwitches, summarizeSwitches, COMPETITION_KEYS, perProblemFlowStyle } from '../lib/switches.js';
 import { resolveSteps } from '../lib/steps.js';
 import { scanInput, summarizeScan } from '../lib/scan.js';
 import { scaffoldWorkspace, readSkillBody } from '../lib/scaffold.js';
 import { buildStepPrompt } from '../lib/prompt.js';
+import { buildClaudeMd } from '../lib/claudeMd.js';
 import { runGates, gatePaperDataCheck, gatePages, gateFigures, parseFigureManifest } from '../lib/gates.js';
 import { readState, writeState, nextPendingStep } from '../lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from '../lib/questions.js';
@@ -303,6 +304,22 @@ async function main() {
   const codeStep = state.steps.find((s) => s.key === 'comp-code');
   check('编程实现步要求 figures/*.json', codeStep.companions.includes('figures/*.json'));
   check('数据图质量检查脚本随包提供', existsSync(path.join(ASSETS, 'utils', 'figure_pdf_quality_check.py')));
+
+  // 17) 逐问流程图：开关 + 自定义要求里的 image 选择 + 标记与技能
+  check('逐问流程图默认关', perProblemFlowStyle({ flow_per_problem: false }) === 'off');
+  check('开启但未点名 image → DrawIO',
+    perProblemFlowStyle({ flow_per_problem: true, custom_requirements: '每问画流程图' }) === 'drawio');
+  check('开启且自定义要求点名 image → GPT Image',
+    perProblemFlowStyle({ flow_per_problem: true, custom_requirements: '每问流程图用 image 生成' }) === 'gptimage');
+  const flowSwitches = normalizeSwitches({ flow_per_problem: true, custom_requirements: '每问流程图用 image 生成' }).switches;
+  const flowCm = buildClaudeMd({ switches: flowSwitches, steps: resolveSteps(flowSwitches), title: 't', uploaded: [] });
+  check('CLAUDE.md 写逐问流程标记',
+    flowCm.includes('MMW_FLOW_PER_PROBLEM=1') && flowCm.includes('MMW_PER_PROBLEM_FLOW_STYLE=gptimage'),
+    'markers missing');
+  check('framework 固定风格随包提供',
+    gptSrc.includes('Visual modeling framework diagram') && gptSrc.includes('graphical abstract style') && gptSrc.includes('"framework"'));
+  const flowParsed = parseFigureManifest('<!-- BEGIN FIGURE_MANIFEST -->\n**逐问流程图（GPT Image）**\n- fig_flow_q1\n<!-- END FIGURE_MANIFEST -->');
+  check('逐问流程图（GPT Image）章节归入 GPTIMG', (flowParsed?.GPTIMG ?? []).includes('fig_flow_q1'), JSON.stringify(flowParsed));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;
