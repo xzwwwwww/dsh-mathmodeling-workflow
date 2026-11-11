@@ -187,6 +187,8 @@ echo ""
 # Determine language（注意：comp_apmcm_zh 是中文赛项，必须先排除）
 if grep -qi 'comp_apmcm_zh' "$PLAN_DOC" CLAUDE.md 2>/dev/null; then
     DRAWIO_LANG="zh"
+elif grep -qE 'language:[[:space:]]*en' CLAUDE.md 2>/dev/null; then
+    DRAWIO_LANG="en"
 elif grep -qi 'MCM\|ICM\|APMCM\|comp_mcm\|comp_apmcm\|comp_certcup_en\|comp_shuwei_en\|语言.*English\|Language.*English' "$PLAN_DOC" CLAUDE.md 2>/dev/null; then
     DRAWIO_LANG="en"
 else

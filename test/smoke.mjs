@@ -60,6 +60,21 @@ async function main() {
   const skipped = resolveSteps({ ...switches, skip_figures: true }).map((s) => s.key);
   check('skip_figures 去掉两个图表步', !skipped.some((k) => k.startsWith('paper-figure')));
 
+  // 2b) 英文赛事：语言推断 + 论文/编译步替换
+  const mcm = normalizeSwitches({ competition: 'mcm', problem_id: 'A' });
+  check('MCM 自动推断英文', mcm.errors.length === 0 && mcm.switches.language === 'en' && mcm.switches.max_pages === 25,
+    `${mcm.switches.language}/${mcm.switches.max_pages}`);
+  check('中文赛项默认中文', normalizeSwitches({ competition: 'cumcm' }).switches.language === 'zh');
+  check('显式 language 覆盖自动推断', normalizeSwitches({ competition: 'mcm', language: 'zh' }).switches.language === 'zh');
+  const enSteps = resolveSteps(mcm.switches);
+  const enKeys = enSteps.map((s) => s.key);
+  check('英文语言替换论文/编译步', enKeys.includes('comp-paper-en') && enKeys.includes('comp-compile-en')
+    && !enKeys.includes('comp-paper-zh') && !enKeys.includes('comp-compile-zh'), enKeys.join('>'));
+  check('英文论文步用英文技能', enSteps.find((s) => s.key === 'comp-paper-en')?.skill === '论文撰写English');
+  check('英文编译步用英文技能', enSteps.find((s) => s.key === 'comp-compile-en')?.skill === '编译与合规English');
+  check('英文编译在论文之后', enKeys.indexOf('comp-paper-en') < enKeys.indexOf('comp-compile-en'));
+  check('英文步数为 8', enSteps.length === 8, String(enSteps.length));
+
   // 3) 扫描 + scaffold
   const inputDir = await fixture();
   const files = await scanInput(inputDir);
@@ -78,6 +93,20 @@ async function main() {
   check('CLAUDE.md 含竞赛规则', cm.includes('## 竞赛规则（全国大学生数学建模竞赛 (CUMCM)）'));
   check('CLAUDE.md 流水线列出步骤', cm.includes('paper-figure-html'));
   check('state.json 落盘', (await readState(workspace))?.steps?.length === steps.length);
+
+  // 3b) 英文 scaffold：技能/模板/CLAUDE.md/页数口径
+  const enWs = path.join(TMP, 'ws_en');
+  await scaffoldWorkspace({ workspaceDir: enWs, assetsDir: ASSETS, inputFiles: files, switches: mcm.switches, steps: enSteps, title: 'MCM A题' });
+  for (const rel of ['skills/论文撰写English/SKILL.md', 'skills/编译与合规English/SKILL.md', '_templates/mcm/main.tex',
+    '_templates/mcm/mcmthesis.cls', 'skills/论文撰写English/templates/mcm/main.tex', '.env_skill']) {
+    check(`英文工作区生成 ${rel}`, existsSync(path.join(enWs, rel)));
+  }
+  const enCm = await readFile(path.join(enWs, 'CLAUDE.md'), 'utf8');
+  check('英文 CLAUDE.md 语言行', enCm.includes('语言: English') && enCm.includes('2200 字符/页'));
+  check('英文 CLAUDE.md 含 MCM 规则', enCm.includes('Summary Sheet') && enCm.includes('pdflatex') && enCm.includes('mcmthesis'));
+  check('英文 CLAUDE.md 步骤用英文 key', enCm.includes('comp-paper-en') && !enCm.includes('comp-paper-zh'));
+  check('英文 .env_skill 含 LANGUAGE=en', (await readFile(path.join(enWs, '.env_skill'), 'utf8')).includes('export LANGUAGE=en'));
+  check('英文技能无旧前缀残留', !(await readFile(path.join(enWs, 'skills/论文撰写English/SKILL.md'), 'utf8')).includes(String.fromCharCode(77, 72) + '_'));
 
   // 4) prompt 渲染
   const body = await readSkillBody(ASSETS, '赛题分析');
@@ -190,6 +219,19 @@ async function main() {
   const pg2 = await gatePages(pagesWs, {});
   check('正文补齐后通过且口径写进 detail', pg2.ok === true && pg2.detail.scope === 'body-pages',
     JSON.stringify({ pages: pg2.detail.estPages, target: pg2.detail.target }));
+
+  // 13b) 英文页数口径：2200 字符/页，排除 current_chapter.tex
+  const enPagesWs = path.join(TMP, 'pages_en');
+  await mkdir(path.join(enPagesWs, '.mmw'), { recursive: true });
+  await mkdir(path.join(enPagesWs, 'paper', 'sections'), { recursive: true });
+  await writeFile(path.join(enPagesWs, '.mmw', 'state.json'), JSON.stringify({ switches: { max_pages: 10, language: 'en' } }), 'utf8');
+  await writeFile(path.join(enPagesWs, 'paper', 'sections', '1_intro.tex'), 'A'.repeat(22000), 'utf8');
+  await writeFile(path.join(enPagesWs, 'paper', 'sections', 'current_chapter.tex'), 'B'.repeat(8000), 'utf8');
+  const enPg = await gatePages(enPagesWs, {});
+  check('英文按 2200 字符/页估算且排除临时章节',
+    enPg.ok === true && enPg.detail.charsPerPage === 2200 && enPg.detail.chars === 22000
+      && enPg.detail.skippedNonBody.includes('current_chapter.tex'),
+    JSON.stringify({ chars: enPg.detail.chars, pages: enPg.detail.estPages, skipped: enPg.detail.skippedNonBody }));
   // 11) 图表风格 → 技能映射
   const natureSkills = resolveSteps({ ...switches, figure_style: 'nature' }).map((s) => s.skill);
   const defaultSkills = resolveSteps({ ...switches, figure_style: 'default' }).map((s) => s.skill);
@@ -314,8 +356,7 @@ async function main() {
   const flowSwitches = normalizeSwitches({ flow_per_problem: true, custom_requirements: '每问流程图用 image 生成' }).switches;
   const flowCm = buildClaudeMd({ switches: flowSwitches, steps: resolveSteps(flowSwitches), title: 't', uploaded: [] });
   check('CLAUDE.md 写逐问流程标记',
-    flowCm.includes('MMW_FLOW_PER_PROBLEM=1') && flowCm.includes('MMW_PER_PROBLEM_FLOW_STYLE=gptimage'),
-    'markers missing');
+    flowCm.includes('MMW_FLOW_PER_PROBLEM=1') && flowCm.includes('MMW_PER_PROBLEM_FLOW_STYLE=gptimage'));
   check('framework 固定风格随包提供',
     gptSrc.includes('Visual modeling framework diagram') && gptSrc.includes('graphical abstract style') && gptSrc.includes('"framework"'));
   const flowParsed = parseFigureManifest('<!-- BEGIN FIGURE_MANIFEST -->\n**逐问流程图（GPT Image）**\n- fig_flow_q1\n<!-- END FIGURE_MANIFEST -->');

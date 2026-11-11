@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.2
+
+- 英文论文步补充模板题号约束：复制模板后必须把 `problem = A`（mcm/default）或 `\tihao{[A/B/C]}`（apmcm）替换成 CLAUDE.md 里的真实 `problem_id`（MCM A/B/C，ICM D/E/F），避免封面题号显示错误或占位符。
+- 英文全流程 8 步闸门实测（分析/建模/编程/图表/流程图/复核/论文/编译）全部通过；英文 AI 声明 `used` 态（4 张附录表 + main.tex 注入）验证通过。
+- 版本号 0.4.2。
+## 0.4.1
+
+- 英文论文严格模式实测通过：`comp-paper-en` 的 prompt 会追加与中文相同的严格模式数据核对段（`paper_data_check.py` + 两份 md + `DATA_CHECK_PASSED`），闸门 `pages`（英文 2200 字符/页）与 `paper_data_check`（strict）均正常。
+- CLAUDE.md 的写作语言行按语言输出（英文赛事：`Write the paper in English`，中文赛事保持原文）。
+- 流程图绘制 / 流程图绘制HTML 的语言判定优先读 `language: en`，不再只靠 MCM/ICM 字样猜；英文赛事的图内文字与 caption 正确走英文。
+- 英文赛事 `_templates` 改为复制 `论文撰写English/templates`（与英文技能自带 mcmthesis/apmcmthesis 版本一致），中文赛事仍用中文技能模板。
+- 清理品牌名残留：`compile_utils.sh` 的浮动调参标记改为 `MMW-FLOAT-TUNE`；流程图 HTML 示例注释的旧前缀改为 `data-mmw`；README/CHANGELOG/smoke 去掉旧前缀字面量。
+- 仅论文/编译两步的 skill 随语言变化，其余 6 步 skill 与 gate 集合完全一致（已脚本对比验证）。
+## 0.4.0
+
+- 英文赛事支持：`competition` 新增 `mcm` / `icm` / `apmcm`（英文），页数默认 25。
+- 新增 `language` 开关（`zh` / `en`）：中文赛项默认 zh，MCM/ICM/APMCM 自动 en，显式传值可覆盖。语言决定论文/编译技能、图表标签语言与页数估算口径。
+- 新增英文技能 `论文撰写English`（COMAP 格式：Summary Sheet / TOC / Model / Results）与 `编译与合规English`（pdflatex + bibtex）；从原实现整包迁入、统一标记前缀为 `MMW_`、删除 .enc。
+- 步骤按语言切换：`comp-paper-en` / `comp-compile-en` 替换中文论文/编译步，闸门集合保持一致（8 步）。
+- `gatePages` 英文按 2200 字符/页估算，排除 `current_chapter.tex` 临时文件。
+- `paper_data_check.py` 增加英文编号过滤（Figure/Table/Section/Eq/[n]/1st 等），避免把图号/章节号误当数据。
+- CLAUDE.md 增加英文竞赛规则（Summary Sheet、COMAP 结构、pdflatex、mcmthesis 模板）、英文页数口径、图表标签语言、英文 AI 声明措辞；`.env_skill` 导出 `LANGUAGE`。
+- README 增加「英文赛事（MCM/ICM/APMCM）」小节与语言开关说明；smoke 增加英文语言推断、步骤替换、模板/技能生成、英文页数口径等断言。
 ## 0.3.11
 
 - 初始化警告：逐问流程图选了 GPT Image 但没配置 key（环境变量或 `_utils/_gpt_image_config.json`）时，`modeling_init` 直接提示"这些图会被跳过"。

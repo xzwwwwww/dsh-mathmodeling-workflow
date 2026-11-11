@@ -424,7 +424,7 @@ echo "GPT_IMAGE: ready (Python=$PYTHON, config=_utils/_gpt_image_config.json)"
 **2. Determine language:**
 ```bash
 # Check paper language from planning docs（注意：comp_apmcm_zh 是中文赛项，必须先排除）
-if grep -qi 'comp_apmcm_zh' CLAUDE.md 2>/dev/null; then
+if grep -qE 'language:[[:space:]]*en' CLAUDE.md 2>/dev/null; then
     GPTIMG_LANG="zh"
 elif grep -qi 'MCM\|ICM\|APMCM\|comp_mcm\|comp_apmcm\|comp_certcup_en\|comp_shuwei_en' CLAUDE.md 2>/dev/null; then
     GPTIMG_LANG="en"
@@ -503,7 +503,7 @@ Claude must construct the prompt BASED ON THE FINAL methods/results from MODELIN
 ⛔ 约束：
 - 不超过 6 个视觉元素；不要写具体颜色
 - 不生成真人面孔/肖像——人物只做抽象剪影
-- 标注文字用简体中文（`--lang zh`），数学变量用拉丁字母（R, H, L），不写具体数字
+- 标注文字用 $GPTIMG_LANG 对应语言（zh=简体中文 / en=English），数学变量用拉丁字母（R, H, L），不写具体数字
 - 出图前先 `--dry-run` 看一眼最终提示词（确认没有"彩色/卡通"等冲突词），再正式生成
 
 #### 机理示意图 (fig_mechanism.png)
@@ -558,7 +558,7 @@ Claude must construct the prompt BASED ON THE FINAL methods/results from MODELIN
 ⛔ 约束：
 - 一题一张，`fig_flow_q1`、`fig_flow_q2`… 与子问题编号一一对应
 - 中间必须是本题的核心模型/函数，四周是本题的输入与输出，不要画成通用模板
-- 文字用简体中文（`--lang zh`），公式只放本题核心 1-2 个
+- 文字用 $GPTIMG_LANG 对应语言（zh=简体中文 / en=English），公式只放本题核心 1-2 个
 - 出图前先 `--dry-run --style framework` 检查最终提示词
 - 命名与 DrawIO 逐问流程图同为 `fig_flow_qN`：manifest 里只出现在 GPT Image 段，不要同时在 DrawIO 段重复规划
 

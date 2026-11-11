@@ -195,6 +195,8 @@ fi
 # 语言判定（comp_apmcm_zh 是中文赛项，先排除）
 if grep -qi 'comp_apmcm_zh' "$PLAN_DOC" CLAUDE.md 2>/dev/null; then
     FIG_LANG="zh"
+elif grep -qE 'language:[[:space:]]*en' CLAUDE.md 2>/dev/null; then
+    FIG_LANG="en"
 elif grep -qi 'MCM\|ICM\|APMCM\|comp_mcm\|comp_apmcm\|Language.*English\|语言.*English' "$PLAN_DOC" CLAUDE.md 2>/dev/null; then
     FIG_LANG="en"
 else
@@ -1319,7 +1321,7 @@ html,body{margin:0;padding:0;width:fit-content;height:fit-content;background:tra
 3. **边缘必成线**：各分区/各行左右边缘对齐成一条线；箭头接节点中轴（横排 `align-items:center`、竖排 `justify-items:center`）。做不到 = 没用 grid/stretch 在硬凑，回去改结构。
 4. ⛔ **给对齐意图打标记（让 geom-check 兜底验证）**：主干/纵列上**每个应竖直对齐的节点 + 中间的竖箭头/连线**都加 `data-mmw-col="1"`（同一列用同一个值，第二列用 `"2"`…）；**每个应水平对齐的同行节点**加 `data-mmw-row="1"`。⛔ **只给"确实该对齐成一条线"的元素打**——错落设计、不同列的节点别打同一个值（否则会被误判错位）。竖箭头是无文字的 `div` 也照打，正好验证"箭头接在节点中轴"。打了标记后 `--geom-check` 会量它们中轴坐标：grid 锁死的组极差≈0-1px 直接过；手写 width/margin 挪出的错位会被抓成 FAIL。**标记不影响渲染观感**（`data-*` 是纯语义属性），只为让确定性自检生效。
 
-<!-- data-mh 对齐标记示例：主干三节点+两箭头声明同一列，geom-check 验证中轴一致 -->
+<!-- data-mmw 对齐标记示例：主干三节点+两箭头声明同一列，geom-check 验证中轴一致 -->
 ```html
 <div class="colgrid">
   <div class="n" data-mmw-col="1">① 数据预处理</div>

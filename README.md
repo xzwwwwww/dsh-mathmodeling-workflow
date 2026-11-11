@@ -82,13 +82,14 @@ git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 
 agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国赛A-<时间戳>/`。
 
-### 4. 开关一览（20 个）
+### 4. 开关一览（21 个）
 
 | 开关 | 取值 | 默认 | 用途 |
 |---|---|---|---|
-| `competition` | cumcm / wuyi / huazhong / apmcm_zh / diangong / mathorcup / zhongqing / yangtze / liaoning / huashu / huawei / generic | `cumcm` | 赛项：决定竞赛规则、默认页数、LaTeX 模板 |
+| `competition` | cumcm / wuyi / huazhong / apmcm_zh / diangong / mathorcup / zhongqing / yangtze / liaoning / huashu / huawei / mcm / icm / apmcm / generic | `cumcm` | 赛项：决定竞赛规则、默认页数、LaTeX 模板、默认语言（MCM/ICM/APMCM 英文 → en） |
 | `problem_id` | A/B/C… | 空 | 题号，写进参数和规则段 |
 | `title` | 任意字符串 | 空（取目录名） | 论文标题 / 赛题简称 |
+| `language` | `zh` / `en` | 按赛项自动（中文赛项 zh，MCM/ICM/APMCM 英文 en） | 论文语言：决定用中文还是英文论文/编译技能、图表标签语言、正文页数估算口径（中文 900 字/页，英文 2200 字符/页） |
 | `max_pages` | 正整数 | 赛项默认（多数 30，`apmcm_zh` 25） | **正文页数目标（下限）**：目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文上限 |
 | `figure_style` | `default` / `nature` | `default` | 数据图风格：default=按工作区随机配色（去指纹）；nature=Nature 排版+深蓝主色 |
 | `flowchart_engine` | `drawio` / `html` | `drawio` | 流程图引擎：drawio 产物可拖拽编辑；html 布局更好、不可拖拽 |
@@ -140,12 +141,34 @@ agent 会回显类似：
 | 04 | 图表生成 | 数据图（matplotlib，按 manifest 对账） |
 | 05 | 流程图/架构图 | DrawIO 或 HTML 引擎画流程、架构、TikZ 图 |
 | 06 | 逻辑对抗复核 | 六类逻辑缺口复核（方向反、跨问矛盾、任务读歪…） |
-| 07 | 论文撰写 | LaTeX 正文、摘要、图表嵌入、引用；strict 时做数据真实性核对 |
-| 08 | 编译与合规检查 | XeLaTeX 编译、模板完整性、图嵌入、AI 声明合规 |
+| 07 | 论文撰写 | 中文：XeLaTeX；英文（MCM/ICM）：COMAP 格式、Summary Sheet、pdflatex；strict 时做数据真实性核对 |
+| 08 | 编译与合规检查 | 中文：XeLaTeX；英文：pdflatex + bibtex；模板完整性、图嵌入、AI 声明合规 |
 
-可调整：`flowchart_engine=html` 会把第 05 步换成 HTML 引擎技能；`skip_figures` 去掉 04+05；`enable_comp_review=false` 去掉 06；`fast` 模式跳过 06 的深度复核和数据核对。
+可调整：`flowchart_engine=html` 会把第 05 步换成 HTML 引擎技能；`skip_figures` 去掉 04+05；`enable_comp_review=false` 去掉 06；`fast` 模式跳过 06 的深度复核和数据核对；`language=en` 会把 07/08 换成英文论文/编译技能。
 
 每一步结束都由**确定性闸门**验收（产物存在、图表对账、正文页数、逻辑合同、AI 声明、数据核对），不通过就带着修复提示重派，最多重试 2 次。
+
+## 英文赛事（MCM / ICM / APMCM）
+
+`competition=mcm|icm|apmcm` 时语言自动为 `en`（用户显式传 `language=zh` 可覆盖），论文/编译步骤自动切换成英文技能：
+
+| 项 | 中文赛项 | 英文赛项 |
+|---|---|---|
+| 论文技能 | `论文撰写` | `论文撰写English`（COMAP 格式） |
+| 编译技能 | `编译与合规` | `编译与合规English` |
+| LaTeX 模板 | cumcm / wuyi / … | `_templates/mcm`（mcmthesis）或 `_templates/apmcm`（apmcmthesis） |
+| 编译引擎 | XeLaTeX | pdflatex + bibtex |
+| 结构 | 摘要 → 正文 → 参考文献 → 附录 | Summary Sheet（300-400 词）→ TOC → Introduction → Model → Results → References → Appendix |
+| 页数口径 | 900 字/页 | 2200 字符/页（Summary/TOC/References/Appendix 不计） |
+| 图表标签 | 中文 | English |
+
+提示词示例：
+
+```
+用建模插件跑：D:\2026美赛A，MCM A 题，正文 25 页，英文论文
+```
+
+英文技能里的旧标记前缀已统一换成 `MMW_*`，与中文技能共用同一套 CLAUDE.md 标记（fast 模式、AI 声明、逐问流程等）。
 
 ## 示例成果
 

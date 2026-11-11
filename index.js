@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.3.11';
+const BUILD = '0.4.2';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -100,6 +100,7 @@ export function apply(ctx, config = {}) {
         problem_id: { type: 'string', description: '题号（A/B/C…），写进参数与竞赛规则' },
         title: { type: 'string', description: '论文标题/赛题简称，默认取赛题目录名' },
         max_pages: { type: 'number', description: '正文页数目标（下限，不是全文上限）：目录之后→参考文献之前；无目录则摘要之后→参考文献之前；不含摘要/目录/参考文献/附录代码/AI 声明。缺省用赛项默认，rich_mode 打开时抬到 ≥50' },
+        language: { type: 'string', enum: ['zh', 'en'], description: '论文语言：zh=中文（默认中文赛项）/ en=English（默认 MCM/ICM/APMCM 英文赛事）。显式传值覆盖自动推断，决定用中文还是英文论文/编译技能、页数估算口径（900 字/页 vs 2200 字符/页）' },
         figure_style: { type: 'string', enum: ['default', 'nature'], description: '数据图风格：default=去指纹随机配色；nature=深蓝主色+Arial+粗轴' },
         flowchart_engine: { type: 'string', enum: ['drawio', 'html'], description: '流程图引擎：drawio 产物可拖拽编辑；html 布局更好但不可拖拽。会替换步骤里的技能' },
         diagram_style: { type: 'string', enum: ['mono', 'plain', 'modern'], description: '流程图版式，仅 html 引擎生效' },

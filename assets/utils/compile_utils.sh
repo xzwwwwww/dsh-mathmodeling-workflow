@@ -817,7 +817,7 @@ fi
 #   浮动参数、跳过 placeins 行。
 echo "--- 注入受控浮动调参 ---"
 if [ -f "$PAPER_DIR/main.tex" ]; then
-    if grep -q 'MH-FLOAT-TUNE' "$PAPER_DIR/main.tex" 2>/dev/null; then
+    if grep -q 'MMW-FLOAT-TUNE' "$PAPER_DIR/main.tex" 2>/dev/null; then
         echo "  ✓ 浮动调参已存在（跳过，幂等）"
     else
         # 探测是否已加载 placeins（main.tex preamble 或任一 *.cls）
@@ -836,7 +836,7 @@ if [ -f "$PAPER_DIR/main.tex" ]; then
         fi
         TUNE_FILE=$(mktemp)
         {
-            echo '% MH-FLOAT-TUNE 受控浮动调参（防整页空白/一页一图）'
+            echo '% MMW-FLOAT-TUNE 受控浮动调参（防整页空白/一页一图）'
             if [ "$HAS_PLACEINS" = true ]; then
                 echo '% placeins 已由模板/cls 加载，此处不重复注入（避免 Option clash）'
             else

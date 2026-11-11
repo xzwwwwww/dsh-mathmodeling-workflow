@@ -105,19 +105,32 @@ def strip_non_data(text: str, mode: str) -> str:
 NUMBER_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 SKIP_PREFIX = ("图", "表", "式", "第", "附录", "节", "章", "年", "月", "日", "页", "[", "(", "（", "【")
 SKIP_SUFFIX = ("页", "年", "月", "日", "章", "节", "图", "表", "式", "个", "条", "次", "步", "维")
+# 英文论文里的编号类前缀（Figure 3 / Table 2 / Section 4 / [12] 等），不当作数据
+EN_SKIP_PREFIX = {
+    "figure", "fig", "figs", "table", "tab", "eq", "equation", "equations", "section", "sec",
+    "chapter", "ch", "appendix", "step", "ref", "reference", "references", "year", "page", "no",
+    "number", "problem", "question", "model", "subproblem", "algorithm", "assumption", "lemma",
+    "theorem", "proof", "example", "remark", "footnote", "item", "part", "phase", "stage",
+}
 
 
 def extract_numbers(text: str):
-    """返回 [(原始串, 浮点值, 上下文, 小数位, 是否百分数)]，已过滤编号/年份/章节号。"""
+    """返回 [(原始串, 浮点值, 上下文, 小数位, 是否百分数)]，已过滤编号/年份/章节号（中英文都覆盖）。"""
     found = []
     for match in NUMBER_RE.finditer(text):
         raw = match.group(0)
         start, end = match.span()
-        before = text[max(0, start - 6):start].rstrip()
-        after = text[end:end + 4]
+        before = text[max(0, start - 24):start].rstrip()
+        after = text[end:end + 6]
         if before and before[-1] in SKIP_PREFIX:
             continue
+        # 英文编号前缀：Figure 3 / Table~2 / Section 4 / Eq.(5)
+        word = re.search(r"([A-Za-z]+)\.?$", before.replace("~", " ").replace("(", " "))
+        if word and word.group(1).lower() in EN_SKIP_PREFIX:
+            continue
         if after[:1] in SKIP_SUFFIX:
+            continue
+        if re.match(r"(?i)(st|nd|rd|th)\b", after):              # 1st / 2nd / 3rd / 4th
             continue
         if re.fullmatch(r"(19|20)\d{2}", raw):                   # 年份
             continue
