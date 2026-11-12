@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 try:
@@ -44,18 +45,14 @@ BROWSER_CANDIDATES = [
 ]
 
 
-def find_browser():
-    env = os.environ.get("MMW_BROWSER", "").strip()
-    if env and Path(env).is_file():
-        return env
-    for candidate in BROWSER_CANDIDATES:
-        if candidate and Path(candidate).is_file():
-            return candidate
-    for name in ("msedge", "chrome", "chromium", "chromium-browser", "google-chrome", "microsoft-edge"):
-        found = shutil.which(name)
-        if found:
-            return found
-    return None
+def browser_candidates():
+    configured = os.environ.get("MMW_BROWSER", "").strip()
+    if configured and Path(configured).is_file():
+        return [configured]
+    candidates = BROWSER_CANDIDATES + [
+        shutil.which(name) for name in ("msedge", "chrome", "chromium", "chromium-browser", "google-chrome", "microsoft-edge")
+    ]
+    return list(dict.fromkeys(candidate for candidate in candidates if candidate and Path(candidate).is_file()))
 
 
 def read_html(path: Path) -> str:
@@ -227,7 +224,7 @@ def prepare(src: Path, workdir: Path, render_math: bool, measure: bool, script_d
         else:
             print("[capture] ⚠ 未找到 KaTeX 素材（_utils/katex/），公式按原样输出", file=sys.stderr)
     html = inject(html, extra)
-    target = workdir / (src.stem + ".render.html")
+    target = workdir / (src.stem + (".measure.html" if measure else ".render.html"))
     target.write_text(html, encoding="utf-8")
     return target
 
@@ -247,7 +244,7 @@ def measure(browser: str, page: Path, timeout: int):
     result = run_browser(browser, [
         "--virtual-time-budget=4000", "--dump-dom", page.as_uri(),
     ], timeout)
-    if result is None:
+    if result is None or result.returncode != 0:
         return None
     match = re.search(r"MMWGEOM:(\{.*?\})<", result.stdout, re.S)
     if not match:
@@ -258,10 +255,56 @@ def measure(browser: str, page: Path, timeout: int):
         return None
 
 
+def measure_available(browsers, page, timeout):
+    for browser in browsers:
+        data = measure(browser, page, timeout)
+        if data is not None:
+            return browser, data
+    return browsers[0], None
+
+
 def inject_head(html: str, extra: str) -> str:
     if "</head>" in html:
         return html.replace("</head>", extra + "</head>", 1)
     return extra + html
+
+
+def complete_output(file: Path, fmt: str) -> bool:
+    try:
+        with file.open("rb") as stream:
+            signature = stream.read(8)
+            stream.seek(-min(file.stat().st_size, 1024), os.SEEK_END)
+            tail = stream.read()
+    except OSError:
+        return False
+    if fmt == "pdf":
+        return signature.startswith(b"%PDF-") and tail.rstrip().endswith(b"%%EOF")
+    return signature == b"\x89PNG\r\n\x1a\n" and tail.endswith(b"\x00\x00\x00\x00IEND\xaeB\x60\x82")
+
+
+def capture_output(browser, page, out, size, timeout, fmt):
+    # 部分浏览器启动器会先退出，子进程随后才写文件。直到本轮的新文件
+    # 完整写入前，保留临时 HTML 和原目标；同盘 replace 对并发读者也是原子的。
+    out.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    with tempfile.TemporaryDirectory(dir=out.parent) as tmp:
+        pending = Path(tmp) / ("capture." + fmt)
+        flag = "--print-to-pdf" if fmt == "pdf" else "--screenshot"
+        args = [f"--window-size={size[0]},{size[1]}", "--virtual-time-budget=4000",
+                f"{flag}={pending}", "--no-pdf-header-footer", page.as_uri()]
+        result = run_browser(browser, args, timeout)
+        if result is None or result.returncode != 0:
+            return False
+        while True:
+            if complete_output(pending, fmt):
+                try:
+                    pending.replace(out)
+                    return True
+                except PermissionError:  # Windows：写进程可能还未释放句柄
+                    pass
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.1)
 
 
 def render_pdf(browser: str, page: Path, out: Path, size, timeout: int) -> bool:
@@ -277,27 +320,12 @@ def render_pdf(browser: str, page: Path, out: Path, size, timeout: int) -> bool:
     html = inject_head(html, page_css)
     sized = page.with_name(page.stem + ".sized.html")
     sized.write_text(html, encoding="utf-8")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    result = run_browser(browser, [
-        f"--window-size={int(width)},{int(height)}",
-        "--virtual-time-budget=4000",
-        f"--print-to-pdf={out}",
-        "--no-pdf-header-footer",
-        sized.as_uri(),
-    ], timeout)
-    return bool(result) and out.is_file() and out.stat().st_size > 0
+    return capture_output(browser, sized, out, (width, height), timeout, "pdf")
 
 
 def render_png(browser: str, page: Path, out: Path, size, timeout: int) -> bool:
     width, height = (size or {}).get("w", 1600), (size or {}).get("h", 900)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    result = run_browser(browser, [
-        f"--window-size={int(width)},{int(height)}",
-        "--virtual-time-budget=4000",
-        f"--screenshot={out}",
-        page.as_uri(),
-    ], timeout)
-    return bool(result) and out.is_file() and out.stat().st_size > 0
+    return capture_output(browser, page, out, (int(width), int(height)), timeout, "png")
 
 
 def main() -> int:
@@ -316,7 +344,8 @@ def main() -> int:
     args = ap.parse_args()
 
     script_dir = Path(__file__).resolve().parent
-    browser = find_browser()
+    browsers = browser_candidates()
+    browser = browsers[0] if browsers else None
 
     # ---------------- 几何自检模式
     if args.geom_check is not None:
@@ -333,7 +362,7 @@ def main() -> int:
             return 2
         with tempfile.TemporaryDirectory() as tmp:
             page = prepare(src, Path(tmp), args.render_math, True, script_dir)
-            data = measure(browser, page, args.timeout)
+            browser, data = measure_available(browsers, page, args.timeout)
         if data is None:
             print("[capture] 几何自检无法取得结果（浏览器执行失败）", file=sys.stderr)
             return 2
@@ -372,7 +401,7 @@ def main() -> int:
         size = {"w": args.width, "h": args.height} if args.width and args.height else None
         if size is None:
             geo_page = prepare(src, Path(tmp), args.render_math, True, script_dir)
-            measured = measure(browser, geo_page, args.timeout)
+            browser, measured = measure_available(browsers, geo_page, args.timeout)
             if measured:
                 size = measured.get("size")
         ok = render_pdf(browser, page, out, size, args.timeout) if fmt == "pdf" \

@@ -36,6 +36,8 @@ npx -y @deepseek-ai/dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmod
 
 ```bash
 git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
+cd dsh-mathmodeling-workflow
+pnpm install --prod
 ```
 
 然后在 DSH 里二选一：
@@ -43,7 +45,7 @@ git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 - **桌面端**：插件管理 → 安装 bundle → 目标填克隆下来的目录
 - **Agent**：`plugin_manager({ action: "install_bundle", target: "<克隆目录的绝对路径>" })`
 
-更新：方式一重跑 npx 命令；方式二 `git pull` 后把插件关闭再启用一次（或重启 DSH）。
+更新：方式一重跑 npx 命令；方式二运行 `git pull` 和 `pnpm install --prod` 后把插件关闭再启用一次（或重启 DSH）。
 卸载：插件管理里移除，或 `plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
 
 ## 使用
@@ -102,7 +104,7 @@ agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国�
 | `skip_figures` | true / false | `false` | 跳过两个图表步 |
 | `skip_drawio` | true / false | `false` | 只跳过流程图步 |
 | `flow_per_problem` | true / false | `false` | 逐问流程图：开 → 每个子问题各画一张 `fig_flow_qN`；引擎见 `flow_per_problem_engine` |
-| `flow_per_problem_engine` | `auto` / `drawio` / `html` / `gptimage` | `auto` | 逐问流程图引擎：`auto` 跟随 `flowchart_engine`（自定义要求写 image/gpt/生图 时用 GPT Image）；`html` 就是「逐问 HTML」（需同时设 `flowchart_engine=html`）；`drawio`/`html` 必须与全局引擎一致 |
+| `flow_per_problem_engine` | `auto` / `drawio` / `html` / `gptimage` | `auto` | 逐问流程图引擎：`auto` 跟随 `flowchart_engine`（自定义要求明确指定逐问流程图使用 GPT Image 时用生图）；`html` 就是「逐问 HTML」（需同时设 `flowchart_engine=html`）；`drawio`/`html` 必须与全局引擎一致 |
 | `min_figures` / `min_tables` / `min_models` | 整数 或 `auto` | `auto` | 数量下限参考，写进 CLAUDE.md 供技能自检 |
 | `custom_requirements` | 自由文本 | 空 | 自定义要求（导师规范、必须包含的内容），最高优先级，会进 CLAUDE.md |
 
@@ -268,7 +270,7 @@ python _utils/gpt_image.py --style mechanism \
 自定义要求：每问的流程图请用 image 生成，不要用 DrawIO。
 ```
 
-默认 `flow_per_problem_engine: auto`：跟随全局 `flowchart_engine`——全局 HTML 时逐问图也用 HTML（`fig_flow_q*.html + .pdf`），全局 DrawIO 时用 DrawIO；自定义要求里同时出现 image/gpt/生图 + 流程图 时用 GPT Image。也可以显式指定：
+默认 `flow_per_problem_engine: auto`：跟随全局 `flowchart_engine`——全局 HTML 时逐问图也用 HTML（`fig_flow_q*.html + .pdf`），全局 DrawIO 时用 DrawIO；自定义要求明确指定逐问流程图使用 GPT Image 时切换为生图。也可以显式指定：
 
 - `flow_per_problem_engine: "html"`（需同时 `flowchart_engine: "html"`）：逐问 HTML；
 - `flow_per_problem_engine: "drawio"`（需同时 `flowchart_engine: "drawio"`）：逐问 DrawIO；

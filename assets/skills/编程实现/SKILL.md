@@ -164,16 +164,17 @@ CC=$?   # 0=通过 1=HARD FAIL(名不副实,必修) 2=缺文件跳过
    ```python
    # 数据加载末尾 —— 摄入完整性断言（基准从 DATA_PROFILE.json 取，只 print 结论，遵守 Step 4.5 规则 B）
    import json, os
-   _files = json.load(open('DATA_PROFILE.json', encoding='utf-8'))['files']
+   with open('DATA_PROFILE.json', encoding='utf-8') as profile_file:
+       _files = json.load(profile_file)['files']
    # fname = 实际读取路径（如 'A/data.csv' / 'user_data/A/data.csv' / 绝对路径）。
    # 先算相对 user_data 的台账键；只有键缺失时才按 basename 唯一兜底，同名多文件必须报歧义。
-   _rel = fname.replace('\\', '/')
-   if _rel.startswith('user_data/'):
-       _rel = _rel[len('user_data/'):]
-   elif os.path.isabs(fname):
-       _rel = os.path.relpath(fname, 'user_data').replace(os.sep, '/')
+   fname = os.fspath(fname)
+   _path = os.path.normpath(fname.replace('\\', '/'))
+   if os.path.isabs(_path):
+       _path = os.path.relpath(_path, 'user_data')
+   _rel = _path.replace(os.sep, '/').removeprefix('user_data/')
    _prof = _files.get(_rel)
-   if _prof is None:
+   if _prof is None and '/' not in _rel:
        _same = {k: v for k, v in _files.items()
                 if v.get('basename') == os.path.basename(fname) or k.split('/')[-1] == os.path.basename(fname)}
        assert len(_same) == 1, (
@@ -181,6 +182,7 @@ CC=$?   # 0=通过 1=HARD FAIL(名不副实,必修) 2=缺文件跳过
            f"请按相对 user_data 的路径（如 A/data.csv）读取，并用同一相对路径查台账。")
        _prof = next(iter(_same.values()))
    # 先确认该文件建档成功（建档失败的只有 error 键、无 total_rows）——报错说人话，别抛裸 KeyError
+   assert _prof is not None, f'[未建档] {_rel} 不在 DATA_PROFILE.json 中'
    assert 'total_rows' in _prof, (
        f"[未建档] {fname} 不在 DATA_PROFILE.json 或建档失败（{_prof.get('error','缺记录')}）——"
        f"先修 data_profile.py 把该文件读通再核对；连档都建不出来的文件不应直接喂给模型。")

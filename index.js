@@ -3,18 +3,19 @@ import { lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from '
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMPETITIONS, DEFAULT_SWITCHES, COMPETITION_KEYS, normalizeSwitches, summarizeSwitches, perProblemFlowStyle } from './lib/switches.js';
+import { COMPETITIONS, DEFAULT_SWITCHES, COMPETITION_KEYS, normalizeSwitches, summarizeSwitches, perProblemFlowStyle, explicitSwitchesForUpdate } from './lib/switches.js';
 import { resolveSteps, stepDirName } from './lib/steps.js';
 import { scanInput, summarizeScan } from './lib/scan.js';
-import { scaffoldWorkspace, readSkillBody, syncTemplates } from './lib/scaffold.js';
+import { scaffoldWorkspace, readSkillBody, syncTemplates, refreshBundledChecks } from './lib/scaffold.js';
 import { buildStepPrompt } from './lib/prompt.js';
 import { runGates } from './lib/gates.js';
+import { workspaceFlowStyle } from './lib/flowPlan.js';
 import { readState, writeState, nextPendingStep, progressOf } from './lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/questions.js';
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.5.0';
+const BUILD = '0.5.1';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -307,6 +308,7 @@ export function apply(ctx, config = {}) {
         };
       }
       const index = state.steps.findIndex((s) => s.key === step.key);
+      await refreshBundledChecks(workspace, ASSETS_DIR);
       const skillBody = await readSkillBody(ASSETS_DIR, step.skill);
       const prompt = await buildStepPrompt({ workspace, state, step, skillBody, index, total: state.steps.length });
 
@@ -604,7 +606,7 @@ export function apply(ctx, config = {}) {
 
       const report = [
         `工作区：${workspace}`,
-        `进度：${done}/${total} ｜ 开关：${summarizeSwitches(state.switches)}`,
+        `进度：${done}/${total} ｜ 开关：${summarizeSwitches(state.switches, await workspaceFlowStyle(workspace, state.switches))}`,
         '',
         ...rows,
         '',
@@ -644,19 +646,7 @@ export function apply(ctx, config = {}) {
       if (completed.length) {
         throw new Error(`已有步骤完成（${completed.map((s) => s.key).join(', ')}），不能改开关（改步骤集合会让索引错位）。请新建工作区。`);
       }
-      // 以用户显式传入的开关为基底重新推导：换赛项时 language/max_pages 等默认值应跟着新赛项变。
-      // 旧工作区迁移：v0.4.4 没有 explicitSwitches；v0.4.5 只写入了残缺字段（如仅 figure_style）。
-      // 两种情况都用 state.switches 补全缺失配置，避免第二次改开关把赛项/题号/语言/页数丢掉。
-      const prior = state.explicitSwitches;
-      const incomplete = !prior || !['competition', 'language', 'max_pages'].every((k) => k in prior);
-      let explicitBase = incomplete ? { ...state.switches, ...(prior ?? {}) } : prior;
-      // 换赛项且本次没显式指定语言/页数 → 删掉基线里的旧值，让 normalize 按新赛项重新推导
-      if (args.switches?.competition && args.switches.competition !== state.switches.competition) {
-        explicitBase = { ...explicitBase };
-        if (args.switches.language === undefined) delete explicitBase.language;
-        if (args.switches.max_pages === undefined) delete explicitBase.max_pages;
-      }
-      const explicit = { ...explicitBase, ...(args.switches ?? {}) };
+      const explicit = { ...explicitSwitchesForUpdate(state), ...(args.switches ?? {}) };
       const { switches, errors } = normalizeSwitches(explicit);
       if (errors.length) throw new Error(errors.join('；'));
 

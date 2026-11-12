@@ -557,6 +557,8 @@ ls _utils/figure_recipes_*.md 2>/dev/null || ls skills/shared-scripts/figure_rec
   - GPTIMG-4: 问题二求解框架图 → fig_flow_q2 → 问题二章节开头
 - 三种风格不要混：同一份清单里 `fig_flow_q*` 要么全在 DrawIO 段（drawio/html）、要么全在 GPT Image 段。
 
+开启逐问图时，在 FIGURE_MANIFEST 逐项列出 `fig_flow_q1` 到最后一问，并与 CAPABILITY_CHECKLIST.json 的 n_subproblems 及正文中的子问题编号核对。分析步骤和负责出图的步骤都会验收这份清单。
+
 判断方法（写清单前先跑）：
 ```bash
 STYLE="none"

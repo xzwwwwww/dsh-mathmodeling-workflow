@@ -2,6 +2,8 @@
 import { mkdir, rm, writeFile, readFile, stat, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { PDFDocument, PDFName, PDFNumber } from 'pdf-lib';
+import { explicitSwitchesForUpdate } from '../lib/switches.js';
 import { fileURLToPath } from 'node:url';
 
 import { normalizeSwitches, summarizeSwitches, COMPETITION_KEYS, COMPETITIONS, perProblemFlowStyle } from '../lib/switches.js';
@@ -478,11 +480,28 @@ async function main() {
   await mkdir(path.join(pdfWs, '.mmw'), { recursive: true });
   await mkdir(path.join(pdfWs, 'paper'), { recursive: true });
   await writeFile(path.join(pdfWs, '.mmw', 'state.json'), JSON.stringify({ switches: { competition: 'mcm' } }), 'utf8');
-  await writeFile(path.join(pdfWs, 'paper', 'main.log'), 'Output written on main.pdf (26 pages, 1 bytes).', 'utf8');
+  const pdfFile = path.join(pdfWs, 'paper', 'main.pdf');
+  const doc = await PDFDocument.create();
+  for (let i = 0; i < 25; i++) doc.addPage();
+  const original = Buffer.from(await doc.save({ useObjectStreams: false }));
+  const page = doc.getPage(0);
+  page.node.set(PDFName.of('Rotate'), PDFNumber.of(90));
+  const update = Buffer.from('\n' + page.ref + ' obj\n' + page.node + '\nendobj\n');
+  const previous = original.toString('latin1').match(/startxref\s+(\d+)\s+%%EOF\s*$/)[1];
+  const tail = 'xref\n' + page.ref.objectNumber + ' 1\n' + String(original.length + 1).padStart(10, '0')
+    + ' 00000 n \ntrailer\n<< /Size ' + (doc.context.largestObjectNumber + 1)
+    + ' /Root ' + doc.context.trailerInfo.Root + ' /Prev ' + previous + ' >>\nstartxref\n'
+    + (original.length + update.length) + '\n%%EOF\n';
+  await writeFile(pdfFile, Buffer.concat([original, update, Buffer.from(tail)]));
+  const rotated = await gatePdfPages(pdfWs);
+  check('增量旋转首页的 25 页 PDF 按当前页树验收', rotated.ok && rotated.detail.pages === 25);
+  doc.addPage();
+  await writeFile(pdfFile, await doc.save());
+  await writeFile(path.join(pdfWs, 'paper', 'main.log'), 'Output written on main.pdf (24 pages, 1 bytes).');
   const overPages = await gatePdfPages(pdfWs);
-  check('美赛 PDF 超 25 页被挡', overPages.ok === false && overPages.detail.pages === 26, JSON.stringify(overPages.detail));
-  await writeFile(path.join(pdfWs, 'paper', 'main.log'), 'Output written on main.pdf (24 pages, 1 bytes).', 'utf8');
-  check('美赛 PDF ≤25 页通过', (await gatePdfPages(pdfWs)).ok === true);
+  check('26 页 PDF 不受旧日志影响', !overPages.ok && overPages.detail.pages === 26);
+  await writeFile(pdfFile, 'corrupt PDF');
+  check('损坏的 PDF 不能借旧日志放行', !(await gatePdfPages(pdfWs)).ok);
 
   const emptyWs = path.join(TMP, 'empty_html_ws');
   await mkdir(path.join(emptyWs, 'figures'), { recursive: true });
@@ -530,9 +549,6 @@ async function main() {
   check('compile_check.sh 无 grep -c 双零写法', !compileCheck.includes('|| echo 0'));
   const dataProfile = await readFile(path.join(ASSETS, 'utils', 'data_profile.py'), 'utf8');
   check('data_profile 递归扫描子目录', dataProfile.includes('"**"') || dataProfile.includes("'**'"));
-  const pdcSrc = await readFile(path.join(ASSETS, 'utils', 'paper_data_check.py'), 'utf8');
-  check('数据核对的比例换算受字段类型限制', pdcSrc.includes('ratio_field') && pdcSrc.includes('fullmatch(leaf)'));
-
   const enPaperSkill = await readFile(path.join(ASSETS, 'skills', '论文撰写English', 'SKILL.md'), 'utf8');
   check('英文模板选择只读 $COMPETITION', enPaperSkill.includes('[ "$COMPETITION" = "apmcm" ]')
     && !enPaperSkill.includes('grep -qi "apmcm" CLAUDE.md'));
@@ -542,10 +558,37 @@ async function main() {
   check('编程步按相对路径查数据台账', coderSkill.includes('_files.get(_rel)'));
   const htmlSkill = await readFile(path.join(ASSETS, 'skills', '流程图绘制HTML', 'SKILL.md'), 'utf8');
   check('HTML 技能注明 DrawIO 逐问图的例外', htmlSkill.includes('MMW_PER_PROBLEM_FLOW_STYLE=drawio'));
-  const gatesSrc = await readFile(new URL('../lib/gates.js', import.meta.url), 'utf8').catch(() => '');
-  check('PDF 页数同时统计明文与压缩流',
-    gatesSrc.includes('明文 + 所有解压流') && gatesSrc.includes('count += (out.match(pageRe)')
-      && !gatesSrc.includes('if (count) return count'));
+  for (const requirements of ['每问流程图用 HTML，不要用 GPT Image。', '概念图用 GPT Image，逐问流程图用 HTML。', 'Do not use GPT Image for flowcharts.']) {
+    check('auto 尊重逐问 HTML 要求：' + requirements, perProblemFlowStyle({ ...htmlFlow, custom_requirements: requirements }) === 'html');
+  }
+  const stored = { competition: 'cumcm', rich_mode: true };
+  const rich = { explicitSwitches: stored, switches: normalizeSwitches(stored).switches };
+  check('关闭丰满模式恢复赛项默认页数', normalizeSwitches({ ...explicitSwitchesForUpdate(rich), rich_mode: false }).switches.max_pages === 30);
+  const userLimits = { competition: 'cumcm', language: 'en', max_pages: 12 };
+  const nextContest = normalizeSwitches({ ...explicitSwitchesForUpdate({ switches: normalizeSwitches(userLimits).switches, explicitSwitches: userLimits }), competition: 'wuyi' }).switches;
+  check('仅改赛项保留显式语言及页数', nextContest.language === 'en' && nextContest.max_pages === 12);
+  const migrated = explicitSwitchesForUpdate({ switches: { ...mcm.switches, problem_id: 'B', max_pages: 25 }, explicitSwitches: { figure_style: 'nature' } });
+  check('从残缺历史状态恢复赛项、题号和页数', migrated.competition === 'mcm' && migrated.problem_id === 'B' && migrated.max_pages === 25);
+
+  const coverageWs = path.join(TMP, 'coverage');
+  await mkdir(path.join(coverageWs, '.mmw'), { recursive: true });
+  const oldSwitches = { ...htmlFlow };
+  delete oldSwitches.flow_per_problem_engine;
+  await writeFile(path.join(coverageWs, '.mmw', 'state.json'), JSON.stringify({ switches: oldSwitches }));
+  await writeFile(path.join(coverageWs, 'CLAUDE.md'), 'MMW_PER_PROBLEM_FLOW_STYLE=drawio\n');
+  const oldStep = resolveSteps(oldSwitches).find((item) => item.key === 'paper-figure-html');
+  const oldPrompt = await buildStepPrompt({ workspace: coverageWs, state: { switches: oldSwitches, title: '旧项目', steps: [] },
+    step: { ...oldStep, companions: [] }, skillBody: '', index: 0, total: 1 });
+  check('旧工作区沿用 DrawIO 派发', oldPrompt.includes('逐问流程图引擎=DrawIO') && !oldPrompt.includes('逐问流程图引擎=HTML'));
+  await writeFile(path.join(coverageWs, 'CLAUDE.md'), 'MMW_PER_PROBLEM_FLOW_STYLE=html\n');
+  const partial = '## 问题一\n## 问题2\n## Question 3\n<!-- BEGIN FIGURE_MANIFEST -->\n**逐问流程图（HTML）**\n- fig_flow_q1\n- fig_flow_q2\n';
+  const analysisPath = path.join(coverageWs, 'PROBLEM_ANALYSIS.md');
+  await writeFile(analysisPath, partial + '<!-- END FIGURE_MANIFEST -->');
+  const analysisStep = { key: 'comp-prob-analysis', gates: ['artifact'], primaryOutput: 'PROBLEM_ANALYSIS.md', minBytes: 1 };
+  const missingFlow = await runGates(coverageWs, analysisStep);
+  check('逐问图清单漏第三问时拒绝结束分析', !missingFlow.ok && missingFlow.results[0].detail.missing.includes('fig_flow_q3'));
+  await writeFile(analysisPath, partial + '- fig_flow_q3\n<!-- END FIGURE_MANIFEST -->');
+  check('逐问图清单与三问一致时放行', (await runGates(coverageWs, analysisStep)).ok);
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;

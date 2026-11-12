@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+from collections import defaultdict
 import argparse
 import json
 import re
@@ -110,7 +111,7 @@ def strip_non_data(text: str, mode: str) -> str:
     return text
 
 
-NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_.])")
+NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_]|\.\d)")
 SKIP_PREFIX = ("图", "表", "式", "第", "附录", "节", "章", "年", "月", "日", "页", "[", "(", "（", "【")
 SKIP_SUFFIX = ("页", "年", "月", "日", "章", "节", "图", "表", "式", "个", "条", "次", "步", "维")
 # 英文论文里的编号类前缀（Figure 3 / Table 2 / Section 4 / [12] 等），不当作数据
@@ -129,14 +130,41 @@ EN_SKIP_SUFFIX = {
 }
 
 
+# 将正文的局部量纲和 JSON 叶子字段对齐；未标注的值只可做同尺度核对。
+METRIC_RE = re.compile(
+    r"(?P<money>成本|费用|金额|价格|收入|利润|预算|美元|元|(?<![a-z])(?:costs?|prices?|revenue|profit|budget|dollars?|yuan|rmb|cny|usd)(?![a-z]))|"
+    r"(?P<duration>耗时|时长|小时|分钟|秒|(?<![a-z])(?:duration|hours?|minutes?|seconds?|elapsed)(?![a-z]))|"
+    r"(?P<distance>距离|里程|千米|公里|(?<![a-z])(?:distance|mileage|kilomet(?:er|re)s?|km)(?![a-z]))|"
+    r"(?P<count>人数|数量|人次|(?<![a-z])(?:headcount|persons?|people|count)(?![a-z]))|"
+    r"(?P<ratio>准确率|精确率|召回率|覆盖率|概率|比例|占比|百分比|百分率|(?<![a-z])"
+    r"(?:accuracy|precision|recall|coverage|probability|prob|percent(?:age)?|ratio|rate|share|auc|f1(?:_score)?|pct)(?![a-z]))",
+    re.I,
+)
+
+
+def claim_metric(before, after, percent):
+    if percent:
+        return "ratio"
+    # 优先匹配紧随数字的单位，再看同一短句、上一个数字之后最近的指标。
+    unit = re.match(r"^\s*(?:万|亿)?(美元|元|小时|分钟|秒|公里|千米|人次|人)", after)
+    if unit:
+        return {"人": "count", "人次": "count"}.get(unit[1]) or METRIC_RE.search(unit[1]).lastgroup
+    english_unit = METRIC_RE.match(after.lstrip())
+    if english_unit:
+        return english_unit.lastgroup
+    clause = re.split(r"[,，。;；%]", before)[-1]
+    hints = list(METRIC_RE.finditer(clause))
+    return hints[-1].lastgroup if hints else None
+
+
 def extract_numbers(text: str):
-    """返回 [(原始串, 浮点值, 上下文, 小数位, 是否百分数)]，已过滤编号/年份/章节号（中英文都覆盖）。"""
+    """返回 [(原始串, 浮点值, 上下文, 小数位, 是否百分数, 指标量纲)]，已过滤编号/年份/章节号（中英文都覆盖）。"""
     found = []
     for match in NUMBER_RE.finditer(text):
         raw = match.group(0)
         start, end = match.span()
         before = text[max(0, start - 24):start].rstrip()
-        after = text[end:end + 6]
+        after = text[end:end + 32]
         if before and before[-1] in SKIP_PREFIX:
             continue
         # 英文编号前缀：Figure 3 / Table~2 / Section 4 / Eq.(5)
@@ -161,38 +189,35 @@ def extract_numbers(text: str):
         except ValueError:
             continue
         decimals = len(raw.split(".")[1]) if "." in raw else 0
-        found.append((raw, value, (before[-12:] + raw + after[:12]).replace("\n", " "), decimals, percent))
+        found.append((raw, value, (before[-12:] + raw + after[:12]).replace("\n", " "), decimals, percent, claim_metric(before, after, percent)))
     return found
 
 
-def matches(number: float, decimals: int, percent: bool, entries) -> bool:
-    """同尺度四舍五入容差 + 相对容差。
-
-    100 倍换算只在「论文数字明确带 %」或「字段叶子名是比例类（accuracy/rate/...）」时允许；
-    只看叶子键、且整词匹配（父键 problem_1 含 "prob"、duration_hours 含 "ratio" 都不算），
-    普通金额/人数/距离（JSON 12 vs 正文 1200）绝不跨尺度匹配。
-    """
-    half = 0.5 * (10 ** -decimals)
-    ratio_field = re.compile(
-        r"^(?:percent|percentage|rate|ratio|accuracy|precision|recall|f1|f1_score|auc|prob|probability|share|coverage|pct)$",
-        re.I,
-    )
-    for _, key, data_value in entries:
-        if percent:
-            # 论文写 97.0%：JSON 存 0.97（小数）或 97（百分数值）都接受
-            if abs(number / 100.0 - data_value) <= max(half / 100.0, TOLERANCE * abs(data_value)):
-                return True
-            if abs(number - data_value) <= max(half, TOLERANCE * abs(data_value)):
-                return True
-            continue
-        if abs(number - data_value) <= max(half, TOLERANCE * abs(data_value)):
-            return True
-        # 只对比例类字段（叶子键整词匹配）容忍“漏写 % 号”的 100 倍差异
+def index_values(entries):
+    groups = defaultdict(list)
+    for _, key, value in entries:
         leaf = re.sub(r"\[.*$", "", str(key).split(".")[-1])
-        if ratio_field.fullmatch(leaf):
-            if abs(number - data_value / 100.0) <= max(half, TOLERANCE * abs(data_value / 100.0)):
+        kinds = [m.lastgroup for m in METRIC_RE.finditer(leaf)]
+        kind = "ratio" if "ratio" in kinds else (kinds[-1] if kinds else None)
+        groups[kind].append(value)
+        groups["all"].append(value)
+    return groups
+
+
+def matches(number, decimals, percent, groups, metric):
+    # 有同量纲字段时只用这些字段；旧结果中未标注量纲的值仅作为同尺度兜底。
+    values = groups.get(metric, []) if metric else groups["all"]
+    known_metric = bool(metric and values)
+    if metric and not values:
+        values = groups.get(None, [])
+    half = 0.5 * 10 ** -decimals
+    for value in values:
+        if abs(number - value) <= max(half, TOLERANCE * abs(value)):
+            return True
+        if percent or (metric == "ratio" and known_metric):
+            if abs(number / 100 - value) <= max(half / 100, TOLERANCE * abs(value)):
                 return True
-            if abs(number / 100.0 - data_value) <= max(half / 100.0, TOLERANCE * abs(data_value)):
+            if not percent and abs(number - value / 100) <= max(half, TOLERANCE * abs(value / 100)):
                 return True
     return False
 
@@ -315,12 +340,13 @@ def main() -> int:
         print("[paper_data_check] figures/*.json 里没有数值数据，无法核对（请确认图表步已产出结果 JSON）")
         return 2
 
+    groups = index_values(entries)
     numbers, pending = 0, []
     for path in sources:
         text = strip_non_data(path.read_text(encoding="utf-8", errors="replace"), mode)
-        for raw, value, context, decimals, percent in extract_numbers(text):
+        for raw, value, context, decimals, percent, metric in extract_numbers(text):
             numbers += 1
-            if not matches(value, decimals, percent, entries):
+            if not matches(value, decimals, percent, groups, metric):
                 line = text[:0]  # 行号在原文里找
                 original = path.read_text(encoding="utf-8", errors="replace")
                 line_no = original.find(raw)
