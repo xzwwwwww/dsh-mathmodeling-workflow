@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.4
+
+- `paper_data_check.py` 只核对正文：排除英文模板的 `sections/A_code.tex`、`sections/B_*`（附录）、`sections/Z_ai_disclosure.tex`、`references`、`current_chapter.tex`；摘要（`0_*`）保留核对。修复英文论文因附录代码里的索引/常量数字导致数据核对误报。
+- 数量声明不再当数据：中文「5 张图 / 9 张表 / 3 个问题」与英文「3 sub-problems / 5 figures」自动跳过，结果数字（97.0\%、6.2 minutes）照常核对。
+- 英文论文 Step 1 模板选择改为 **APMCM 优先**：字符串 `APMCM` 含子串 `MCM`，先判 mcm 会把亚太英文论文误套 mcmthesis 模板。
+- `modeling_switches` 改 `language`/`competition` 时同步 `_templates`：en→zh 会恢复中文模板包（此前会停留在英文模板，导致中文论文找不到 cumcm 等模板）。
+- `companions` 闸门忽略英文写作的临时文件 `paper/sections/current_chapter.tex`（此前小文件会误判为“空占位”）。
+- 图表生成技能明确 caption/表头语言必须与论文语言一致（英文论文用英文），不再只写“中文论文”规则。
+- 英文 RULES 的页数文案改为引用 `max_pages`，不再写死 25 页。
+- smoke 新增：模板包随语言切换、`current_chapter.tex` 不参与 companions、数据核对排除规则。
 ## 0.4.3
 
 - GPT Image 图内标注语言改为 `--lang auto`（默认）：自动读工作区 `CLAUDE.md` 的 `language:` 行判定中文/英文；显式 `--lang zh|en` 仍可覆盖。英文赛事不再因为调用漏传 `--lang` 而请求简体中文标注。

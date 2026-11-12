@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { COMPETITIONS, DEFAULT_SWITCHES, COMPETITION_KEYS, normalizeSwitches, summarizeSwitches, perProblemFlowStyle } from './lib/switches.js';
 import { resolveSteps, stepDirName } from './lib/steps.js';
 import { scanInput, summarizeScan } from './lib/scan.js';
-import { scaffoldWorkspace, readSkillBody } from './lib/scaffold.js';
+import { scaffoldWorkspace, readSkillBody, syncTemplates } from './lib/scaffold.js';
 import { buildStepPrompt } from './lib/prompt.js';
 import { runGates } from './lib/gates.js';
 import { readState, writeState, nextPendingStep, progressOf } from './lib/state.js';
@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.4.3';
+const BUILD = '0.4.4';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -576,6 +576,10 @@ export function apply(ctx, config = {}) {
       if (errors.length) throw new Error(errors.join('；'));
 
       const steps = resolveSteps(switches);
+      // 语言/赛项变了：模板包要跟着换（否则 en→zh 时 _templates 里没有 cumcm 等中文模板）
+      if (state.switches.language !== switches.language || state.switches.competition !== switches.competition) {
+        await syncTemplates({ workspaceDir: workspace, assetsDir: ASSETS_DIR, switches });
+      }
       const claudeMd = buildClaudeMd({ switches, steps, title: state.title, uploaded: state.inputFiles });
       await writeFile(path.join(workspace, 'CLAUDE.md'), claudeMd, 'utf8');
       await writeFile(path.join(workspace, '.env_skill'), buildEnvSkill(switches), 'utf8');

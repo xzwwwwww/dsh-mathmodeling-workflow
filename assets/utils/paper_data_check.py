@@ -73,6 +73,13 @@ def collect_json_sources(workspace: Path):
 
 # ---------------------------------------------------------------- 论文侧
 
+# 正文文件：排除附录代码/AI 声明/参考文献/临时章节（与 gatePages 的正文口径一致）。
+# 英文模板会把代码放在 sections/A_code.tex、AI 声明放 sections/Z_ai_disclosure.tex，
+# 这些文件里的大量数字（索引、常量、日期）不是论文引用数据，不能参与核对。
+# 摘要（0_*）保留：摘要里的结果数字也必须与 results.json 一致。
+NON_BODY_SECTION_RE = re.compile(r"^(?:a_|b_|z_|appendix|references?|current_chapter)", re.IGNORECASE)
+
+
 def paper_files(workspace: Path, mode: str):
     paper = workspace / "paper"
     if mode == "docx":
@@ -80,6 +87,7 @@ def paper_files(workspace: Path, mode: str):
         return [target] if target.is_file() else []
     sections = paper / "sections"
     files = sorted(sections.glob("*.tex")) if sections.is_dir() else []
+    files = [f for f in files if not NON_BODY_SECTION_RE.match(f.name)]
     if files:
         return files
     fallback = paper / "main.md"
@@ -112,6 +120,13 @@ EN_SKIP_PREFIX = {
     "number", "problem", "question", "model", "subproblem", "algorithm", "assumption", "lemma",
     "theorem", "proof", "example", "remark", "footnote", "item", "part", "phase", "stage",
 }
+# 数量声明后缀（3 sub-problems / 5 figures / 9 tables…），不是论文引用数据
+EN_SKIP_SUFFIX = {
+    "subproblem", "subproblems", "sub-problem", "sub-problems", "problem", "problems",
+    "question", "questions", "model", "models", "step", "steps", "figure", "figures",
+    "table", "tables", "section", "sections", "equation", "equations", "appendix",
+    "reference", "references", "page", "pages", "year", "years", "chapter", "chapters",
+}
 
 
 def extract_numbers(text: str):
@@ -128,7 +143,11 @@ def extract_numbers(text: str):
         word = re.search(r"([A-Za-z]+)\.?$", before.replace("~", " ").replace("(", " "))
         if word and word.group(1).lower() in EN_SKIP_PREFIX:
             continue
-        if after[:1] in SKIP_SUFFIX:
+        # 英文数量声明：数字后面紧跟 sub-problems / figures / tables 等（不是结果数据）
+        tail = re.match(r"\s*([A-Za-z-]+)", text[end:end + 30])
+        if tail and tail.group(1).lower() in EN_SKIP_SUFFIX:
+            continue
+        if re.match(r"\s*[张个只条次步维页年月日章节图表式]", after):
             continue
         if re.match(r"(?i)(st|nd|rd|th)\b", after):              # 1st / 2nd / 3rd / 4th
             continue

@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { normalizeSwitches, summarizeSwitches, COMPETITION_KEYS, perProblemFlowStyle } from '../lib/switches.js';
 import { resolveSteps } from '../lib/steps.js';
 import { scanInput, summarizeScan } from '../lib/scan.js';
-import { scaffoldWorkspace, readSkillBody } from '../lib/scaffold.js';
+import { scaffoldWorkspace, readSkillBody, syncTemplates } from '../lib/scaffold.js';
 import { buildStepPrompt } from '../lib/prompt.js';
 import { buildClaudeMd } from '../lib/claudeMd.js';
-import { runGates, gatePaperDataCheck, gatePages, gateFigures, parseFigureManifest } from '../lib/gates.js';
+import { runGates, gatePaperDataCheck, gatePages, gateFigures, gateCompanions, parseFigureManifest } from '../lib/gates.js';
 import { readState, writeState, nextPendingStep } from '../lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from '../lib/questions.js';
 
@@ -107,6 +107,23 @@ async function main() {
   check('英文 CLAUDE.md 步骤用英文 key', enCm.includes('comp-paper-en') && !enCm.includes('comp-paper-zh'));
   check('英文 .env_skill 含 LANGUAGE=en', (await readFile(path.join(enWs, '.env_skill'), 'utf8')).includes('export LANGUAGE=en'));
   check('英文技能无旧前缀残留', !(await readFile(path.join(enWs, 'skills/论文撰写English/SKILL.md'), 'utf8')).includes(String.fromCharCode(77, 72) + '_'));
+
+  // 3c) 语言切换时模板包同步（en→zh 不能丢中文模板）；companions 忽略英文临时章节
+  const tplWs = path.join(TMP, 'tpl_ws');
+  await mkdir(tplWs, { recursive: true });
+  await syncTemplates({ workspaceDir: tplWs, assetsDir: ASSETS, switches: mcm.switches });
+  check('英文模板包含 mcm/apmcm/default',
+    ['mcm', 'apmcm', 'default'].every((d) => existsSync(path.join(tplWs, '_templates', d, 'main.tex'))));
+  await syncTemplates({ workspaceDir: tplWs, assetsDir: ASSETS, switches });
+  check('切回中文后 _templates 恢复 cumcm',
+    existsSync(path.join(tplWs, '_templates', 'cumcm', 'main.tex')));
+  const compWs = path.join(TMP, 'comp_ws');
+  await mkdir(path.join(compWs, 'paper', 'sections'), { recursive: true });
+  await writeFile(path.join(compWs, 'paper', 'sections', '1_intro.tex'), 'A'.repeat(200), 'utf8');
+  await writeFile(path.join(compWs, 'paper', 'sections', 'current_chapter.tex'), 'B', 'utf8');
+  const compGate = await gateCompanions(compWs, { companions: ['paper/sections/*.tex'] });
+  check('companions 忽略临时 current_chapter.tex',
+    compGate.ok === true && (compGate.detail.files ?? []).length === 1, JSON.stringify(compGate.detail));
 
   // 4) prompt 渲染
   const body = await readSkillBody(ASSETS, '赛题分析');

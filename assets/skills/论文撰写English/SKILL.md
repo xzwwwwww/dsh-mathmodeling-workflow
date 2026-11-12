@@ -99,12 +99,13 @@ mkdir -p paper/sections
 TMPL_BASE="_templates"
 [ -d "$TMPL_BASE" ] || TMPL_BASE="templates"
 
-if echo "$ARGUMENTS" | grep -qi "mcm\|MCM\|ICM" || grep -qi "mcm\|MCM" CLAUDE.md 2>/dev/null; then
-    echo "Using MCM template"
-    cp "$TMPL_BASE/mcm/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "apmcm\|APMCM\|亚太" || grep -qi "apmcm" CLAUDE.md 2>/dev/null; then
+if echo "$ARGUMENTS" | grep -qi "apmcm\|亚太" || grep -qi "apmcm" CLAUDE.md 2>/dev/null; then
+    # ⛔ APMCM 必须先判：字符串 "APMCM" 里含子串 "MCM"，先判 mcm 会误用 mcmthesis 模板
     echo "Using APMCM template"
     cp "$TMPL_BASE/apmcm/"* paper/ 2>/dev/null
+elif echo "$ARGUMENTS" | grep -qi "mcm\|icm" || grep -qi "mcm\|icm" CLAUDE.md 2>/dev/null; then
+    echo "Using MCM template"
+    cp "$TMPL_BASE/mcm/"* paper/ 2>/dev/null
 else
     echo "Using default English template"
     cp "$TMPL_BASE/default/"* paper/ 2>/dev/null

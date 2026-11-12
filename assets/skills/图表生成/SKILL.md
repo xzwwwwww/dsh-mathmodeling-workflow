@@ -1149,7 +1149,7 @@ echo "TABLE_EXT=$TABLE_EXT (将用于 figures/TABLE_*.${TABLE_EXT})"
 - PDF 模式 → Save as `figures/TABLE_xxx.tex`（booktabs 三线表）
 - Word/DOCX 模式 → Save as `figures/TABLE_xxx.md`（Markdown 三线表）
 
-**⛔ For Chinese papers: table captions and column headers MUST be in Chinese.** Check TOPIC_PLAN.md or PROBLEM_ANALYSIS.md to determine paper language. If Chinese (stats modeling / math modeling competition), all `\caption{}` and column headers must use Chinese.
+**⛔ Table/figure captions and column headers MUST match the paper language.** Read `language` from CLAUDE.md (or the planning doc): Chinese paper → all `\caption{}` and column headers in Chinese; English paper (MCM/ICM/APMCM) → all captions and headers in **English** (the Chinese examples below are for Chinese contests only).
 
 **⛔⛔ 表注只写短标题（中文 ≤20 字 / 英文 ≤14 词）**：`\caption{}` 只写"这张表是什么"的名词短语，**统计口径（重复次数/置信区间/随机数种子）、结论、数据来源全部进正文**，一个字都别塞进表注。正例 `\caption{各体积分数下的导通概率}`；反例 `\caption{问题二四个题给体积分数下的导通概率（$T$=1000 次独立重复……数据来源：\texttt{results/xxx.json}。}`。详见本步末尾 `<table_sizing>` 的表注铁律与「为什么表注更容易写超」。
 
