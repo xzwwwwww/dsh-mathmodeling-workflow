@@ -11,9 +11,7 @@
 
 ## 安装
 
-前置：DSH（桌面版或 Web 版）。用 npx 方式装需要 Node.js + pnpm（DSH 桌面版自带 pnpm；纯 Node 环境先 `npm i -g pnpm`）。
-
-> **兼容性**：已在 DSH `0.2.2-rc.1` 实测通过（工具注册、系统提示注入、8 步流水线、提问中转、开关改写、闸门验收全部正常）。升级 DSH 后如果插件管理里显示未启用，重新启用一次即可——升级可能会重置 profile 里的 bundle 选择。
+> **兼容性实测**　插件 v0.5.1 已在 DSH `0.2.2-rc.2` 的 Desktop 后端和 Web profile 中验证。两端都成功注册了 8 个 `modeling_*` 工具并注入工作流提示。使用测试产物验证了提问回传、开关修改、缺文件拦截及全部 8 个步骤的验收。[DSH 版本说明](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.2)
 
 其余依赖按需装，缺哪个只影响对应那一步：
 
@@ -24,15 +22,23 @@
 | Chromium 内核浏览器（Edge / Chrome） | 仅 `flowchart_engine=html` 时需要 |
 | 中文字体 | 编译中文模板（初始化时会尝试从系统字体回填） |
 
-### 方式一：npx 一条命令（推荐）
+### 桌面版安装
+
+先启动一次 DSH Desktop 以初始化 `desktop` profile，然后完全退出应用。使用 Desktop 安装目录下的内置命令 `resources/runtime/cli/bin/dsh`（Windows 为 `dsh.cmd`）执行下列命令。如果终端中的 `dsh` 指向其他安装，请把命令开头的 `dsh` 换成内置命令的完整路径。安装完成后重新打开 Desktop。[桌面版内置命令说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.2/apps/desktop/README.zh.md#bundled-command-runtime)
 
 ```bash
-npx -y @deepseek-ai/dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmodeling-workflow
+dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmodeling-workflow
 ```
 
-拉取仓库 → 装进 `desktop` profile → 自动注册进 bundle 列表。Web 版把 `desktop` 换成 `web`。
+### Web 版安装
 
-### 方式二：从本地目录装
+准备 Node.js 24.9.0 或更高版本，并确保终端可以运行 `pnpm`（可用 `npm install -g pnpm` 安装）。以下命令将插件安装到 `web` profile。
+
+```bash
+npx -y @deepseek-ai/dsh@0.2.2-rc.2 plugin --profile web add github:xzwwwwww/dsh-mathmodeling-workflow
+```
+
+### 从本地目录安装
 
 ```bash
 git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
@@ -45,7 +51,7 @@ pnpm install --prod
 - **桌面端**：插件管理 → 安装 bundle → 目标填克隆下来的目录
 - **Agent**：`plugin_manager({ action: "install_bundle", target: "<克隆目录的绝对路径>" })`
 
-更新：方式一重跑 npx 命令；方式二运行 `git pull` 和 `pnpm install --prod` 后把插件关闭再启用一次（或重启 DSH）。
+从 GitHub 安装的插件可按对应平台的步骤重新执行安装命令。从本地目录安装的插件可在克隆目录运行 `git pull` 和 `pnpm install --prod`，然后重新启用插件或重启 DSH。若升级 DSH 后插件显示未启用，在插件管理里重新启用即可。
 卸载：插件管理里移除，或 `plugin_manager({ action: "remove_bundle", target: "@local/dsh-mathmodeling-workflow" })`。
 
 ## 使用
