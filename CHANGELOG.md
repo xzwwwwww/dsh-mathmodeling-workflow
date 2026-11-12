@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+- 新增开关 `flow_per_problem_engine`（`auto` / `drawio` / `html` / `gptimage`），用于逐问流程图引擎：
+  - `auto`（默认）跟随全局 `flowchart_engine`；自定义要求同时写 image/gpt/生图 + 流程图时用 `gptimage`；
+  - `html` = 逐问 HTML（需同时 `flowchart_engine=html`），产物 `fig_flow_q*.html + .pdf`；
+  - `drawio` 需与全局 drawio 一致；`gptimage` 不受全局引擎限制。
+- 引擎不一致（如全局 drawio + 逐问 html）在 `normalizeSwitches` 直接报错，避免派发到错误技能。
+- 赛题分析技能补 `MMW_PER_PROBLEM_FLOW_STYLE=html` 分支（清单标题、产物、判断脚本）；流程图绘制HTML 技能补“flow style=html 时逐问图由本技能产出 `.html+.pdf`”；`paper-figure-html` 的 prompt 追加对应覆盖指令。
+- 逐问图重排正则支持 `html`，`paper-figure-html` 按 `.html + .pdf` 验收（缺 `.html` 被拦）。
+- README 开关表更新为 22 个，补「逐问 HTML」用法；smoke 新增 auto/显式 html/不一致报错/CLAUDE 标记/HTML 图验收等断言。
 ## 0.4.7
 
 - **PDF 页数（P1）**：`pdf_pages` 不再因为明文里出现 1 个 `/Type /Page` 就提前返回；明文与全部 FlateDecode 对象流一起累计。增量保存/旋转首页的 35 页 PDF 不会误读成 1 页。

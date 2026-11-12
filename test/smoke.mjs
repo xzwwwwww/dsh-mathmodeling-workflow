@@ -432,6 +432,33 @@ async function main() {
     gptSrc.includes('default="auto"') && gptSrc.includes('def resolve_lang')
       && gptSrc.includes('Use English labels') && gptSrc.includes('【标注文字】图内标注使用简体中文'));
 
+  // 17c) 逐问 HTML 开关：auto 跟随全局、显式 html、与全局不一致报错、图按 .html+.pdf 验收
+  const htmlFlow = normalizeSwitches({ competition: 'cumcm', flow_per_problem: true, flowchart_engine: 'html' }).switches;
+  check('逐问 HTML：auto 跟随全局 html', perProblemFlowStyle(htmlFlow) === 'html'
+    && summarizeSwitches(htmlFlow).includes('开(html)'));
+  const htmlExplicit = normalizeSwitches({ competition: 'cumcm', flow_per_problem: true, flowchart_engine: 'html', flow_per_problem_engine: 'html' }).switches;
+  check('逐问 HTML：显式 html 生效', perProblemFlowStyle(htmlExplicit) === 'html');
+  const htmlMismatch = normalizeSwitches({ competition: 'cumcm', flow_per_problem: true, flowchart_engine: 'drawio', flow_per_problem_engine: 'html' });
+  check('逐问 HTML 与全局引擎不一致时报错', htmlMismatch.errors.length > 0, htmlMismatch.errors.join(';'));
+  const htmlCm = buildClaudeMd({ switches: htmlFlow, steps: resolveSteps(htmlFlow), title: 't', uploaded: [] });
+  check('CLAUDE.md 写逐问 HTML 标记与技能', htmlCm.includes('MMW_PER_PROBLEM_FLOW_STYLE=html')
+    && htmlCm.includes('流程图绘制HTML'));
+  const htmlFlowWs = path.join(TMP, 'flow_html_flow');
+  await mkdir(path.join(htmlFlowWs, 'figures'), { recursive: true });
+  await writeFile(path.join(htmlFlowWs, 'PROBLEM_ANALYSIS.md'), [
+    '<!-- BEGIN FIGURE_MANIFEST -->', '**数据图**', '- fig_q1_trend', '**逐问流程图（HTML）**', '- fig_flow_q1', '<!-- END FIGURE_MANIFEST -->',
+  ].join('\n'), 'utf8');
+  await writeFile(path.join(htmlFlowWs, 'CLAUDE.md'), 'MMW_FLOW_PER_PROBLEM=1\nMMW_PER_PROBLEM_FLOW_STYLE=html\n', 'utf8');
+  await writeFile(path.join(htmlFlowWs, 'figures', 'fig_q1_trend.pdf'), 'pdf', 'utf8');
+  await writeFile(path.join(htmlFlowWs, 'figures', 'fig_flow_q1.html'), '<html>q1</html>', 'utf8');
+  await writeFile(path.join(htmlFlowWs, 'figures', 'fig_flow_q1.pdf'), '%PDF', 'utf8');
+  const htmlFigOk = await gateFigures(htmlFlowWs, { key: 'paper-figure-html', gates: ['figures'] });
+  check('逐问 HTML 图按 .html+.pdf 验收', htmlFigOk.ok === true, JSON.stringify(htmlFigOk.detail?.missing));
+  await rm(path.join(htmlFlowWs, 'figures', 'fig_flow_q1.html'));
+  const htmlFigBad = await gateFigures(htmlFlowWs, { key: 'paper-figure-html', gates: ['figures'] });
+  check('逐问 HTML 缺 .html 被拦', htmlFigBad.ok === false && htmlFigBad.detail.missing.includes('fig_flow_q1'),
+    JSON.stringify(htmlFigBad.detail?.missing));
+
   // 18) 审查回归：跨问按题号取值 / 总页数硬上限 / 空文件不算图 / 题号 Shell 引用
   const crossWs = path.join(TMP, 'cross_ws');
   await mkdir(crossWs, { recursive: true });

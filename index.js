@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.4.7';
+const BUILD = '0.5.0';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -139,7 +139,8 @@ export function apply(ctx, config = {}) {
         enable_comp_review: { type: 'boolean', description: '是否插入「逻辑对抗复核」步骤（默认开；传 false 可省一次子代理调用）' },
         skip_figures: { type: 'boolean', description: '跳过两个图表步骤' },
         skip_drawio: { type: 'boolean', description: '只跳过流程图步骤' },
-        flow_per_problem: { type: 'boolean', description: '逐问流程图：开 → 每个子问题各规划一张 fig_flow_qN（默认关，避免同质化框图）。画法由 custom_requirements 决定：写明 image/gpt/生图 则用 GPT Image --style framework，否则用 DrawIO' },
+        flow_per_problem: { type: 'boolean', description: '逐问流程图：开 → 每个子问题各规划一张 fig_flow_qN（默认关，避免同质化框图）。引擎由 flow_per_problem_engine 决定：auto=跟随 flowchart_engine，自定义要求写 image/gpt/生图 时用 GPT Image' },
+        flow_per_problem_engine: { type: 'string', enum: ['auto', 'drawio', 'html', 'gptimage'], description: '逐问流程图引擎：auto=跟随 flowchart_engine（image 提示优先 gptimage）；drawio/html 必须与 flowchart_engine 一致（逐问 html 就设 flowchart_engine=html + 这里 html）；gptimage=GPT Image 框架图' },
         min_figures: { type: ['number', 'string'], description: '最少数据图张数，或 auto' },
         min_tables: { type: ['number', 'string'], description: '最少表格数，或 auto' },
         min_models: { type: ['number', 'string'], description: '最少模型数，或 auto' },

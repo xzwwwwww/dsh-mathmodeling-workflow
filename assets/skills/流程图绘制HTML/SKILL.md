@@ -315,6 +315,8 @@ echo "🎨 风格种子 SEED=$SEED  STYLE_FAMILY=$STYLE_FAMILY（$_FAM_NAME）  
 | 求解流程图（**仅当规划清单里有**，默认没有） | `fig_flow_q1.html` / `fig_flow_q2.html` … **仅 flow style=html 时** |
 
 ⛔ **当 `CLAUDE.md` 含 `MMW_PER_PROBLEM_FLOW_STYLE=drawio` 时**：`fig_flow_q*` 由 DrawIO 引擎产出（`.drawio` + `.pdf`），本技能**不要**生成 `fig_flow_q*.html`，也不要为它们补 PDF；只画其他 `fig_*`（roadmap/arch/pipeline/framework）。验收按 DrawIO 源文件 + 导出 PDF 对账这些逐问图。
+
+⛔ **当 `CLAUDE.md` 含 `MMW_PER_PROBLEM_FLOW_STYLE=html` 时**：`fig_flow_q*` 由**本技能**用 HTML 生成，每题一张，产物 `figures/fig_flow_q1.html` + `figures/fig_flow_q1.pdf`（及 q2、q3…），manifest 放在流程图段；不要改用 DrawIO/GPT Image。
 | 系统架构图（分层/模块） | `fig_arch.html` |
 | 数据流水线（横向数据流） | `fig_pipeline.html` |
 | 框架矩阵图（方法对比/多维） | `fig_framework.html` |

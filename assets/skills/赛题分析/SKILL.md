@@ -547,11 +547,15 @@ ls _utils/figure_recipes_*.md 2>/dev/null || ls skills/shared-scripts/figure_rec
 - `MMW_PER_PROBLEM_FLOW_STYLE=drawio`（默认）→ 放进 DrawIO 清单：
   - DrawIO-2: 问题一求解流程图 → fig_flow_q1.drawio → 问题一章节开头
   - DrawIO-3: 问题二求解流程图 → fig_flow_q2.drawio → 问题二章节开头
+- `MMW_PER_PROBLEM_FLOW_STYLE=html`（流程图引擎选 HTML 时）→ 放进 DrawIO 清单（章节标题可写 `**逐问流程图（HTML）**`），
+  但产物是 HTML+截图：`figures/fig_flow_q1.html` + `figures/fig_flow_q1.pdf`，由 `流程图绘制HTML` 产出：
+  - DrawIO-2: 问题一求解流程图 → fig_flow_q1.html → 问题一章节开头
+  - DrawIO-3: 问题二求解流程图 → fig_flow_q2.html → 问题二章节开头
 - `MMW_PER_PROBLEM_FLOW_STYLE=gptimage`（用户自定义要求里点名 image 时）→ 放进 **GPT Image** 清单，
   章节标题写成 `**逐问流程图（GPT Image）**`，出图用 `--style framework`（Visual Modeling Framework Diagram）：
   - GPTIMG-3: 问题一求解框架图 → fig_flow_q1 → 问题一章节开头
   - GPTIMG-4: 问题二求解框架图 → fig_flow_q2 → 问题二章节开头
-- 两种风格不要混：同一份清单里 `fig_flow_q*` 要么全在 DrawIO 段、要么全在 GPT Image 段。
+- 三种风格不要混：同一份清单里 `fig_flow_q*` 要么全在 DrawIO 段（drawio/html）、要么全在 GPT Image 段。
 
 判断方法（写清单前先跑）：
 ```bash
@@ -559,6 +563,7 @@ STYLE="none"
 grep -q 'MMW_FLOW_PER_PROBLEM=1' CLAUDE.md 2>/dev/null && STYLE=$(grep -o 'MMW_PER_PROBLEM_FLOW_STYLE=[a-z]*' CLAUDE.md | cut -d= -f2)
 case "$STYLE" in
   drawio)   echo "逐问流程图：DrawIO → 写 DrawIO-2/3/… fig_flow_q*.drawio" ;;
+  html)     echo "逐问流程图：HTML → 写 **逐问流程图（HTML）** 章节 fig_flow_q*.html" ;;
   gptimage) echo "逐问流程图：GPT Image --style framework → 写 **逐问流程图（GPT Image）** 章节 fig_flow_q*" ;;
   *)        echo "不规划 fig_flow_q*（默认）" ;;
 esac
@@ -587,7 +592,7 @@ esac
 | 图类型 | 推荐工具 | 适用场景 | 放置位置 | 是否必须 |
 |--------|---------|---------|---------|---------|
 | 技术路线图 | DrawIO | 所有赛题 | 问题重述章节末尾（`1_restatement.tex`），国赛/竞赛没有单独问题分析章节时放问题重述 | ✅ 必须（1张） |
-| 子问题求解流程图 | DrawIO | 仅当用户开启「每问都画」（CLAUDE.md 有 `MMW_FLOW_PER_PROBLEM=1`） | 各子问题章节开头 | ⛔ 默认**不画**；开启后才每问一张 |
+| 子问题求解流程图 | DrawIO / HTML（按 `MMW_PER_PROBLEM_FLOW_STYLE`） | 仅当用户开启「每问都画」（CLAUDE.md 有 `MMW_FLOW_PER_PROBLEM=1`） | 各子问题章节开头 | ⛔ 默认**不画**；开启后才每问一张 |
 | 数据处理 Pipeline | DrawIO | 涉及多阶段数据清洗/特征工程 | 数据预处理章节 | 按需 |
 | 概念框架图（简单分层） | DrawIO | 涉及理论模型/研究框架构建（无复杂连线） | 引言或理论分析章节 | 按需 |
 | 指标体系层次图 | DrawIO | 涉及 AHP/熵权法/TOPSIS/模糊综合评价等评价类问题 | 模型构建章节 | 评价类必须 |

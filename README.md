@@ -82,7 +82,7 @@ git clone https://github.com/xzwwwwww/dsh-mathmodeling-workflow.git
 
 agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国赛A-<时间戳>/`。
 
-### 4. 开关一览（21 个）
+### 4. 开关一览（22 个）
 
 | 开关 | 取值 | 默认 | 用途 |
 |---|---|---|---|
@@ -101,7 +101,8 @@ agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国�
 | `comp_date_start` / `comp_date_end` | `YYYY-MM-DD` | 空 | 仅 `ai_disclosure=used` 用于生成比赛期内的交互日期 |
 | `skip_figures` | true / false | `false` | 跳过两个图表步 |
 | `skip_drawio` | true / false | `false` | 只跳过流程图步 |
-| `flow_per_problem` | true / false | `false` | 逐问流程图：开 → 每个子问题各画一张 `fig_flow_qN`；具体用 GPT Image 还是 DrawIO 由 `custom_requirements` 决定（写明 image/gpt/生图 用 GPT Image，否则 DrawIO） |
+| `flow_per_problem` | true / false | `false` | 逐问流程图：开 → 每个子问题各画一张 `fig_flow_qN`；引擎见 `flow_per_problem_engine` |
+| `flow_per_problem_engine` | `auto` / `drawio` / `html` / `gptimage` | `auto` | 逐问流程图引擎：`auto` 跟随 `flowchart_engine`（自定义要求写 image/gpt/生图 时用 GPT Image）；`html` 就是「逐问 HTML」（需同时设 `flowchart_engine=html`）；`drawio`/`html` 必须与全局引擎一致 |
 | `min_figures` / `min_tables` / `min_models` | 整数 或 `auto` | `auto` | 数量下限参考，写进 CLAUDE.md 供技能自检 |
 | `custom_requirements` | 自由文本 | 空 | 自定义要求（导师规范、必须包含的内容），最高优先级，会进 CLAUDE.md |
 
@@ -267,7 +268,11 @@ python _utils/gpt_image.py --style mechanism \
 自定义要求：每问的流程图请用 image 生成，不要用 DrawIO。
 ```
 
-判据是「自定义要求里同时出现 image/gpt/生图 这类词 + 流程图」，否则逐问流程图仍由 DrawIO 画。
+默认 `flow_per_problem_engine: auto`：跟随全局 `flowchart_engine`——全局 HTML 时逐问图也用 HTML（`fig_flow_q*.html + .pdf`），全局 DrawIO 时用 DrawIO；自定义要求里同时出现 image/gpt/生图 + 流程图 时用 GPT Image。也可以显式指定：
+
+- `flow_per_problem_engine: "html"`（需同时 `flowchart_engine: "html"`）：逐问 HTML；
+- `flow_per_problem_engine: "drawio"`（需同时 `flowchart_engine: "drawio"`）：逐问 DrawIO；
+- `flow_per_problem_engine: "gptimage"`：逐问 GPT Image 框架图。
 
 风格由工具统一注入（`--style framework`）：
 
