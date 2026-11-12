@@ -200,6 +200,7 @@ agent 会回显类似：
 - 也可以不改文件，直接设环境变量 `GPT_IMAGE_API_KEY` / `GPT_IMAGE_BASE_URL`（环境变量优先级更高）；
 - 检查是否配好：`python _utils/gpt_image.py --check`；
 - 想看实际发出去的提示词（含固定风格）：`python _utils/gpt_image.py --dry-run --prompt "..."`；
+- 图内标注语言：`--lang auto`（默认）读工作区 `CLAUDE.md` 的 `language:` 行自动选中文/英文，也可显式 `--lang zh|en`；
 - **没配也能跑**：规划里的概念图会被自动跳过，不影响其余步骤。
 
 ### 固定出图风格：MCM Academic Illustration
@@ -248,7 +249,7 @@ agent 会回显类似：
 ```bash
 python _utils/gpt_image.py --style mechanism \
   --prompt "…【主题】【内容要求】…" \
-  --output figures/fig_mechanism_q1.png --lang zh
+  --output figures/fig_mechanism_q1.png --lang auto
 ```
 
 同样可以先用 `--dry-run --style mechanism` 看最终提示词。
@@ -290,7 +291,7 @@ python _utils/gpt_image.py --style mechanism \
 ```bash
 python _utils/gpt_image.py --style framework \
   --prompt "…【主题】【结构要求】…" \
-  --output figures/fig_flow_q1.png --lang zh
+  --output figures/fig_flow_q1.png --lang auto
 ```
 
 出图前同样可以 `--dry-run --style framework` 先看最终提示词。

@@ -222,6 +222,27 @@ def _is_model_level_error(message: str) -> bool:
     return code == 400 and "model" in low
 
 
+def resolve_lang(lang: str, cwd: Optional[Path] = None) -> str:
+    """--lang auto（默认）：读工作区 CLAUDE.md 的 `language:` 行自动判定 zh/en。
+
+    显式 --lang zh / en 优先级最高。英文赛事工作区的 CLAUDE.md 含
+    `- language: en`；找不到时按中文处理。
+    """
+    lang = (lang or "auto").strip().lower()
+    if lang in ("zh", "en"):
+        return lang
+    cwd = Path.cwd() if cwd is None else Path(cwd)
+    for candidate in (cwd / "CLAUDE.md", cwd.parent / "CLAUDE.md"):
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        match = re.search(r"(?im)^\s*-\s*language:\s*(zh|en)\b", text)
+        if match:
+            return match.group(1).lower()
+    return "zh"
+
+
 def build_prompt(user_prompt: str, lang: str, style: str = "scene") -> str:
     """把内容描述包成完整提示词：任务说明 + 内容 + 固定风格 + 安全约束。
 
@@ -438,7 +459,7 @@ def main():
     parser.add_argument("--check", action="store_true", help="仅检查 API Key 是否配置")
     parser.add_argument("--prompt", type=str, help="生成提示词（核心内容，语言/风格自动注入）")
     parser.add_argument("--output", type=str, help="输出路径（.png），自动生成同名 .pdf")
-    parser.add_argument("--lang", type=str, default="zh", choices=["zh", "en"], help="语言：zh 中文（默认）/ en 英文")
+    parser.add_argument("--lang", type=str, default="auto", choices=["auto", "zh", "en"], help="图内标注语言：auto（默认，读 CLAUDE.md 的 language 行）/ zh / en")
     parser.add_argument("--aspect-ratio", type=str, default="16:9", help="宽高比（默认 16:9）")
     parser.add_argument(
         "--model",
@@ -458,7 +479,8 @@ def main():
         if not args.prompt:
             print("ERROR: --prompt is required")
             sys.exit(1)
-        print(build_prompt(args.prompt, args.lang, args.style))
+        lang = resolve_lang(args.lang)
+        print(build_prompt(args.prompt, lang, args.style))
         sys.exit(0)
 
     # --check 模式
@@ -482,7 +504,8 @@ def main():
         sys.exit(1)
 
     # 构建完整 prompt（注入语言/风格/安全约束）
-    full_prompt = build_prompt(args.prompt, args.lang, args.style)
+    lang = resolve_lang(args.lang)
+    full_prompt = build_prompt(args.prompt, lang, args.style)
 
     # 确保输出目录存在
     out_path = Path(args.output)

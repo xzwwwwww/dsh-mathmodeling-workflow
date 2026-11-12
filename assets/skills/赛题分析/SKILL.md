@@ -575,7 +575,7 @@ esac
 
 #### GPT Image / DrawIO 图预规划
 
-**GPT Image 只用于场景示意图**（物理/工程类赛题的问题背景图）。技术路线图、求解流程图、架构图等结构化图表使用 DrawIO。
+**GPT Image 用于场景示意图 / 机理图 /（开启时的）逐问框架图**。技术路线图、求解流程图、架构图等结构化图表使用 DrawIO；逐问流程图的引擎按 `MMW_PER_PROBLEM_FLOW_STYLE` 决定。
 
 **GPT Image 场景示意图（按需，仅物理/工程类赛题）：**
 - 仅当赛题有具体的物理/工程空间场景时才规划（光学、无人机、传感器网络、交通流、热传导、管道网络等）
@@ -698,6 +698,14 @@ GPT Image 图（三种：场景图 / 机理图 / 逐问框架图）：
 
 **总数：DATA=3, DRAWIO=3, TIKZ=1, GPTIMG=2, ALL=9**
 <!-- END FIGURE_MANIFEST -->
+```
+
+📌 **逐问流程图（仅 `MMW_PER_PROBLEM_FLOW_STYLE=gptimage` 时）**：在上面 manifest 的 `<!-- END FIGURE_MANIFEST -->` 之前追加一节，并把 `**总数**` 行的 GPTIMG 计数同步加上这些图（示例默认不含逐问图）。每题一张、只出现在 GPT Image 段，不要在 DrawIO 段重复规划：
+
+```
+**逐问流程图（GPT Image）**
+- fig_flow_q1
+- fig_flow_q2
 ```
 
 ⛔ **铁律：**

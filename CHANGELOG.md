@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3
+
+- GPT Image 图内标注语言改为 `--lang auto`（默认）：自动读工作区 `CLAUDE.md` 的 `language:` 行判定中文/英文；显式 `--lang zh|en` 仍可覆盖。英文赛事不再因为调用漏传 `--lang` 而请求简体中文标注。
+- 图表生成技能补齐逐问框架图调用示例（`--style framework --lang $GPTIMG_LANG`），并加硬规则：所有 `gpt_image.py` 调用必须带 `--lang $GPTIMG_LANG`。
+- manifest 归类不再受章节名写法影响：`IMAGE`/`逐问`/`image` 关键词归入 GPTIMG（GPTIMG 优先于 DRAWIO），并可识别大小写；`gateFigures` 按 `CLAUDE.md` 的 `MMW_PER_PROBLEM_FLOW_STYLE` 对 `fig_flow_q*` 做兜底重排——image 模式的逐问图不会因为模型误写在 DrawIO 段而被并进 DrawIO/HTML 组，反向同理。
+- 赛题分析技能：更新 GPT Image 用途说明（场景图/机理图/逐问框架图），manifest 模板补充逐问流程图条件示例与「总数 GPTIMG 计数同步」提醒。
+- README：GPT Image 示例改为 `--lang auto` 并说明自动语言规则。
+- smoke 新增断言：`流程图（image）` 归入 GPTIMG、image/drawio 两种模式下误写章节的兜底重排、`gpt_image` 默认 auto 与中英文标注规则。
 ## 0.4.2
 
 - 英文论文步补充模板题号约束：复制模板后必须把 `problem = A`（mcm/default）或 `\tihao{[A/B/C]}`（apmcm）替换成 CLAUDE.md 里的真实 `problem_id`（MCM A/B/C，ICM D/E/F），避免封面题号显示错误或占位符。

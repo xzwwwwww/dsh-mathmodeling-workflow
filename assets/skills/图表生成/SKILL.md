@@ -600,6 +600,19 @@ else
     GPTIMG_TOTAL_FAILURES=$((GPTIMG_TOTAL_FAILURES + 1))
 fi
 
+# Example C — 逐问建模框架图（--style framework，仅 MMW_PER_PROBLEM_FLOW_STYLE=gptimage 时）:
+$PYTHON _utils/gpt_image.py \
+  --style framework \
+  --prompt "请绘制一张用于数学建模竞赛论文的可视化建模框架图。
+【主题】问题一：城市交通调度优化
+【结构要求】中间突出核心模型；周围展示输入场景、影响因素与输出结果；箭头表示因果与前后变化；圆角卡片布局。" \
+  --output figures/fig_flow_q1.png \
+  --lang $GPTIMG_LANG \
+  --aspect-ratio 16:9 \
+  --max-retries 3
+
+# ⛔ 每一次 gpt_image.py 调用都必须带 `--lang $GPTIMG_LANG`：不要手写 zh/en，
+#    否则英文论文会请求简体中文标注（默认 --lang auto 只作兜底）。
 # Repeat for each GPTIMG figure...
 # ⛔ 每张图独立重试 3 次（--max-retries 3），不要因为一张图失败就跳过后面的图
 ```

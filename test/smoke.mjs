@@ -381,6 +381,39 @@ async function main() {
   check('有 key 时逐问框架图纳入对账', flowKey.ok === false && flowKey.detail.missing.includes('fig_flow_q1'),
     JSON.stringify(flowKey.detail.missing));
 
+  // 17b) 逐问流程图引擎按 CLAUDE.md 标记归组：章节名写错也不串进 DrawIO/HTML 组
+  const imgParsed = parseFigureManifest('<!-- BEGIN FIGURE_MANIFEST -->\n**流程图（image）**\n- fig_flow_q2\n<!-- END FIGURE_MANIFEST -->');
+  check('「流程图（image）」章节归入 GPTIMG', (imgParsed?.GPTIMG ?? []).includes('fig_flow_q2'), JSON.stringify(imgParsed));
+
+  const mkFlowWs = async (name, title, marker) => {
+    const dir = path.join(TMP, name);
+    await mkdir(path.join(dir, 'figures'), { recursive: true });
+    await writeFile(path.join(dir, 'PROBLEM_ANALYSIS.md'), [
+      '<!-- BEGIN FIGURE_MANIFEST -->',
+      '**数据图**',
+      '- fig_q1_trend',
+      title,
+      '- fig_flow_q1',
+      '<!-- END FIGURE_MANIFEST -->',
+    ].join('\n'), 'utf8');
+    await writeFile(path.join(dir, 'CLAUDE.md'), `- language: en\nMMW_FLOW_PER_PROBLEM=1\nMMW_PER_PROBLEM_FLOW_STYLE=${marker}\n`, 'utf8');
+    await writeFile(path.join(dir, 'figures', 'fig_q1_trend.pdf'), 'pdf', 'utf8');
+    return dir;
+  };
+  const misplacedImg = await mkFlowWs('flow_misplaced_img', '**流程图（DrawIO）**', 'gptimage');
+  process.env.GPT_IMAGE_API_KEY = 'test-key';
+  const misImg = await gateFigures(misplacedImg, { key: 'paper-figure', gates: ['figures'] });
+  delete process.env.GPT_IMAGE_API_KEY;
+  check('image 模式：误写 DrawIO 段的逐问图仍按 GPTIMG 要求',
+    misImg.ok === false && misImg.detail.missing.includes('fig_flow_q1'), JSON.stringify(misImg.detail));
+  const misplacedDrawio = await mkFlowWs('flow_misplaced_drawio', '**逐问流程图（GPT Image）**', 'drawio');
+  const misDrawio = await gateFigures(misplacedDrawio, { key: 'paper-figure-drawio', gates: ['figures'] });
+  check('drawio 模式：误写 GPT Image 段的逐问图仍按 DRAWIO 要求',
+    misDrawio.ok === false && misDrawio.detail.missing.includes('fig_flow_q1'), JSON.stringify(misDrawio.detail));
+  check('gpt_image 默认 --lang auto 且可读 CLAUDE.md',
+    gptSrc.includes('default="auto"') && gptSrc.includes('def resolve_lang')
+      && gptSrc.includes('Use English labels') && gptSrc.includes('【标注文字】图内标注使用简体中文'));
+
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;
 }
