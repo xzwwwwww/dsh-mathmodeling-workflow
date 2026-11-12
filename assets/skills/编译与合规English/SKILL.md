@@ -124,8 +124,8 @@ pdflatex -interaction=nonstopmode main.tex
 After each compilation, check `main.log` for CRITICAL errors. **You MUST fix ALL errors before declaring compilation complete.**
 
 ```bash
-MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted\|begin{document} ended by' paper/main.log 2>/dev/null || echo 0)
-LR_ERR=$(grep -c 'Not allowed in LR mode' paper/main.log 2>/dev/null || echo 0)
+MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted\|begin{document} ended by' paper/main.log 2>/dev/null || true); MATH_ERR=${MATH_ERR:-0}
+LR_ERR=$(grep -c 'Not allowed in LR mode' paper/main.log 2>/dev/null || true); LR_ERR=${LR_ERR:-0}
 echo "Math errors: $MATH_ERR, LR mode errors: $LR_ERR"
 [ $((MATH_ERR + LR_ERR)) -gt 0 ] && grep -B2 'Bad math\|Missing \$ inserted\|Not allowed in LR mode' paper/main.log | grep -E '^\./|^l\.' | head -20
 ```
@@ -248,10 +248,10 @@ GATE_FAIL=0
 
 # --- CRITICAL ---
 [ -f paper/main.pdf ] && [ $(wc -c < paper/main.pdf) -gt 100000 ] && echo "✅ PDF exists" || { echo "❌ PDF missing/small"; GATE_FAIL=$((GATE_FAIL+1)); }
-MATH_ERR=$(grep -c 'Bad math.*delimiter\|Missing \$ inserted' paper/main.log 2>/dev/null || echo 0)
-LR_ERR=$(grep -c 'Not allowed in LR mode' paper/main.log 2>/dev/null || echo 0)
+MATH_ERR=$(grep -c 'Bad math.*delimiter\|Missing \$ inserted' paper/main.log 2>/dev/null || true); MATH_ERR=${MATH_ERR:-0}
+LR_ERR=$(grep -c 'Not allowed in LR mode' paper/main.log 2>/dev/null || true); LR_ERR=${LR_ERR:-0}
 [ "$((MATH_ERR+LR_ERR))" -eq 0 ] && echo "✅ No LaTeX errors" || { echo "❌ $MATH_ERR math + $LR_ERR LR errors"; GATE_FAIL=$((GATE_FAIL+1)); }
-BBL=$(grep -c '\\bibitem' paper/main.bbl 2>/dev/null || echo 0)
+BBL=$(grep -c '\\bibitem' paper/main.bbl 2>/dev/null || true); BBL=${BBL:-0}
 [ "$BBL" -gt 0 ] && echo "✅ Bib: $BBL entries" || { echo "❌ Bib empty"; GATE_FAIL=$((GATE_FAIL+1)); }
 CITE=$(grep -roh '\\cite{' paper/sections/*.tex paper/main.tex 2>/dev/null | wc -l)
 [ "$CITE" -gt 0 ] && echo "✅ Citations: $CITE" || { echo "❌ No citations"; GATE_FAIL=$((GATE_FAIL+1)); }
@@ -261,11 +261,11 @@ PLACEHOLDERS=$(grep -rl 'PLACEHOLDER\|待补充\|TODO\|\[论文标题\]' paper/s
 [ "$PLACEHOLDERS" -eq 0 ] && echo "✅ No placeholders" || { echo "❌ $PLACEHOLDERS files have placeholders"; GATE_FAIL=$((GATE_FAIL+1)); }
 
 # --- WARNING ---
-VBOX=$(grep -c 'Overfull.*vbox' paper/main.log 2>/dev/null || echo 0); [ "$VBOX" -eq 0 ] && echo "✅ No overflow" || { echo "❌ $VBOX overfull vbox"; GATE_FAIL=$((GATE_FAIL+1)); }
-HBOX=$(grep -c 'Overfull.*hbox' paper/main.log 2>/dev/null || echo 0); [ "$HBOX" -lt 5 ] && echo "✅ Hbox: $HBOX" || { echo "❌ $HBOX overfull hbox"; GATE_FAIL=$((GATE_FAIL+1)); }
-AI=0; for f in paper/sections/*.tex; do [ -f "$f" ] || continue; echo "$(basename $f)" | grep -qi 'appendix' && continue; c=$(grep -c '\\begin{itemize}' "$f" 2>/dev/null || echo 0); AI=$((AI+c)); done
+VBOX=$(grep -c 'Overfull.*vbox' paper/main.log 2>/dev/null || true); VBOX=${VBOX:-0}; [ "$VBOX" -eq 0 ] && echo "✅ No overflow" || { echo "❌ $VBOX overfull vbox"; GATE_FAIL=$((GATE_FAIL+1)); }
+HBOX=$(grep -c 'Overfull.*hbox' paper/main.log 2>/dev/null || true); HBOX=${HBOX:-0}; [ "$HBOX" -lt 5 ] && echo "✅ Hbox: $HBOX" || { echo "❌ $HBOX overfull hbox"; GATE_FAIL=$((GATE_FAIL+1)); }
+AI=0; for f in paper/sections/*.tex; do [ -f "$f" ] || continue; echo "$(basename $f)" | grep -qi 'appendix' && continue; c=$(grep -c '\\begin{itemize}' "$f" 2>/dev/null || true); c=${c:-0}; AI=$((AI+c)); done
 [ "$AI" -eq 0 ] && echo "✅ No bullet lists" || { echo "❌ $AI itemize — convert to prose"; GATE_FAIL=$((GATE_FAIL+1)); }
-UNDEF_REFS=$(grep -c 'LaTeX Warning.*Reference.*undefined' paper/main.log 2>/dev/null || echo 0)
+UNDEF_REFS=$(grep -c 'LaTeX Warning.*Reference.*undefined' paper/main.log 2>/dev/null || true); UNDEF_REFS=${UNDEF_REFS:-0}
 [ "$UNDEF_REFS" -eq 0 ] && echo "✅ No undefined refs" || { echo "❌ $UNDEF_REFS undefined refs"; GATE_FAIL=$((GATE_FAIL+1)); }
 STACKING=0; for f in paper/sections/*.tex; do [ -f "$f" ] || continue; s=$(awk '/\\end\{(figure|table)\}/{a=1;t=0;next} a&&/\\begin\{(figure|table)\}/{if(t<3)c++;a=0;next} a&&/[a-zA-Z\x80-\xff]{3,}/{t++} a&&t>=3{a=0} END{print c+0}' "$f" 2>/dev/null); STACKING=$((STACKING+s)); done
 [ "$STACKING" -eq 0 ] && echo "✅ No figure stacking" || { echo "❌ $STACKING figure stacking"; GATE_FAIL=$((GATE_FAIL+1)); }

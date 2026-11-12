@@ -773,7 +773,7 @@ grep -ohE '\((basic|advanced|empirical|competition|academic)[[:space:]]*#[[:spac
             || "$PYTHON" skills/shared-scripts/get_recipe.py "$cat" "$num" 2>/dev/null
         echo
     done > _utils/RECIPES_FOR_THIS_PAPER.md
-echo "已预取 $(grep -c '^##########' _utils/RECIPES_FOR_THIS_PAPER.md 2>/dev/null || echo 0) 个配方 → _utils/RECIPES_FOR_THIS_PAPER.md"
+echo "已预取 $(grep -c '^##########' _utils/RECIPES_FOR_THIS_PAPER.md 2>/dev/null || true) 个配方 → _utils/RECIPES_FOR_THIS_PAPER.md"
 wc -c _utils/RECIPES_FOR_THIS_PAPER.md 2>/dev/null
 ```
 
@@ -1430,8 +1430,8 @@ for script in figures/gen_fig*.py; do
         echo "  ⚠ $bn: 图例硬编码 loc='upper right' — 如果数据在右上角会遮挡，建议改为 loc='best'"
     fi
     # 检查是否有 annotate 和 legend 在同一区域
-    HAS_ANNOTATE=$(grep -c 'ax.annotate\|ax.text' "$script" 2>/dev/null || echo 0)
-    HAS_LEGEND=$(grep -c 'ax.legend' "$script" 2>/dev/null || echo 0)
+    HAS_ANNOTATE=$(grep -c 'ax.annotate\|ax.text' "$script" 2>/dev/null || true); HAS_ANNOTATE=${HAS_ANNOTATE:-0}
+    HAS_LEGEND=$(grep -c 'ax.legend' "$script" 2>/dev/null || true); HAS_LEGEND=${HAS_LEGEND:-0}
     if [ "$HAS_ANNOTATE" -gt 0 ] && [ "$HAS_LEGEND" -gt 0 ]; then
         if ! grep -q "bbox_to_anchor\|loc='best'" "$script" 2>/dev/null; then
             echo "  ⚠ $bn: 同时有标注和图例但未用 loc='best' 或 bbox_to_anchor — 可能遮挡"

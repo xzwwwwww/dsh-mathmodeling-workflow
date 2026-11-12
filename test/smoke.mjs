@@ -9,8 +9,8 @@ import { resolveSteps } from '../lib/steps.js';
 import { scanInput, summarizeScan } from '../lib/scan.js';
 import { scaffoldWorkspace, readSkillBody, syncTemplates } from '../lib/scaffold.js';
 import { buildStepPrompt } from '../lib/prompt.js';
-import { buildClaudeMd } from '../lib/claudeMd.js';
-import { runGates, gatePaperDataCheck, gatePages, gateFigures, gateCompanions, parseFigureManifest } from '../lib/gates.js';
+import { buildClaudeMd, buildEnvSkill } from '../lib/claudeMd.js';
+import { runGates, gatePaperDataCheck, gatePages, gatePdfPages, gateFigures, gateCompanions, parseFigureManifest } from '../lib/gates.js';
 import { readState, writeState, nextPendingStep } from '../lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from '../lib/questions.js';
 
@@ -62,7 +62,7 @@ async function main() {
 
   // 2b) 英文赛事：语言推断 + 论文/编译步替换
   const mcm = normalizeSwitches({ competition: 'mcm', problem_id: 'A' });
-  check('MCM 自动推断英文', mcm.errors.length === 0 && mcm.switches.language === 'en' && mcm.switches.max_pages === 25,
+  check('MCM 自动推断英文', mcm.errors.length === 0 && mcm.switches.language === 'en' && mcm.switches.max_pages === 20,
     `${mcm.switches.language}/${mcm.switches.max_pages}`);
   check('中文赛项默认中文', normalizeSwitches({ competition: 'cumcm' }).switches.language === 'zh');
   check('显式 language 覆盖自动推断', normalizeSwitches({ competition: 'mcm', language: 'zh' }).switches.language === 'zh');
@@ -105,7 +105,7 @@ async function main() {
   check('英文 CLAUDE.md 语言行', enCm.includes('语言: English') && enCm.includes('2200 字符/页'));
   check('英文 CLAUDE.md 含 MCM 规则', enCm.includes('Summary Sheet') && enCm.includes('pdflatex') && enCm.includes('mcmthesis'));
   check('英文 CLAUDE.md 步骤用英文 key', enCm.includes('comp-paper-en') && !enCm.includes('comp-paper-zh'));
-  check('英文 .env_skill 含 LANGUAGE=en', (await readFile(path.join(enWs, '.env_skill'), 'utf8')).includes('export LANGUAGE=en'));
+  check('英文 .env_skill 含 LANGUAGE=en', (await readFile(path.join(enWs, '.env_skill'), 'utf8')).includes("export LANGUAGE='en'"));
   check('英文技能无旧前缀残留', !(await readFile(path.join(enWs, 'skills/论文撰写English/SKILL.md'), 'utf8')).includes(String.fromCharCode(77, 72) + '_'));
 
   // 3c) 语言切换时模板包同步（en→zh 不能丢中文模板）；companions 忽略英文临时章节
@@ -300,6 +300,7 @@ async function main() {
     gf2.ok === false && gf2.detail.missing.includes('fig_flow_q1') && gf2.detail.deferred.DATA === 2,
     JSON.stringify({ missing: gf2.detail.missing, deferred: gf2.detail.deferred }));
   await writeFile(path.join(figWs, 'figures', 'fig_flow_q1.pdf'), 'pdf', 'utf8');
+  await writeFile(path.join(figWs, 'figures', 'fig_flow_q1.html'), '<html>flow</html>', 'utf8');
   const gf3 = await gateFigures(figWs, flowStep);
   check('流程图补齐后通过，表格不参与图对账', gf3.ok === true && gf3.detail.planned === 1, JSON.stringify(gf3.detail.byKind));
 
@@ -430,6 +431,45 @@ async function main() {
   check('gpt_image 默认 --lang auto 且可读 CLAUDE.md',
     gptSrc.includes('default="auto"') && gptSrc.includes('def resolve_lang')
       && gptSrc.includes('Use English labels') && gptSrc.includes('【标注文字】图内标注使用简体中文'));
+
+  // 18) 审查回归：跨问按题号取值 / 总页数硬上限 / 空文件不算图 / 题号 Shell 引用
+  const crossWs = path.join(TMP, 'cross_ws');
+  await mkdir(crossWs, { recursive: true });
+  await writeFile(path.join(crossWs, 'CROSS_PROBLEM_LEDGER.json'), JSON.stringify({
+    problems: [
+      { id: 'Q1', observed: { metric: 10 }, conclusions: [{ quantity: 'metric', imposes: { on: ['Q2'], must_le: 10 } }] },
+      { id: 'Q2', observed: { metric: 15 } },
+      { id: 'Q3', observed: { metric: 5 } },
+    ],
+  }), 'utf8');
+  const crossGate = await runGates(crossWs, { key: 'comp-modeling', gates: ['logic'] });
+  check('跨问逻辑按题号取下游观测值（Q3 不能覆盖 Q2）',
+    crossGate.ok === false && (crossGate.results[0].detail.fails ?? []).some((f) => f.includes('Q2')),
+    JSON.stringify(crossGate.results[0].detail));
+
+  const pdfWs = path.join(TMP, 'pdf_ws');
+  await mkdir(path.join(pdfWs, '.mmw'), { recursive: true });
+  await mkdir(path.join(pdfWs, 'paper'), { recursive: true });
+  await writeFile(path.join(pdfWs, '.mmw', 'state.json'), JSON.stringify({ switches: { competition: 'mcm' } }), 'utf8');
+  await writeFile(path.join(pdfWs, 'paper', 'main.log'), 'Output written on main.pdf (26 pages, 1 bytes).', 'utf8');
+  const overPages = await gatePdfPages(pdfWs);
+  check('美赛 PDF 超 25 页被挡', overPages.ok === false && overPages.detail.pages === 26, JSON.stringify(overPages.detail));
+  await writeFile(path.join(pdfWs, 'paper', 'main.log'), 'Output written on main.pdf (24 pages, 1 bytes).', 'utf8');
+  check('美赛 PDF ≤25 页通过', (await gatePdfPages(pdfWs)).ok === true);
+
+  const emptyWs = path.join(TMP, 'empty_html_ws');
+  await mkdir(path.join(emptyWs, 'figures'), { recursive: true });
+  await writeFile(path.join(emptyWs, 'PROBLEM_ANALYSIS.md'), [
+    '<!-- BEGIN FIGURE_MANIFEST -->', '**流程图**', '- fig_flow_q1', '<!-- END FIGURE_MANIFEST -->',
+  ].join('\n'), 'utf8');
+  await writeFile(path.join(emptyWs, 'figures', 'fig_flow_q1.html'), '', 'utf8');
+  const emptyFig = await gateFigures(emptyWs, { key: 'paper-figure-html', gates: ['figures'] });
+  check('零字节 HTML 不算流程图产出', emptyFig.ok === false && emptyFig.detail.missing.includes('fig_flow_q1'),
+    JSON.stringify(emptyFig.detail));
+
+  check('题号写入 .env_skill 时做 Shell 引用',
+    buildEnvSkill({ max_pages: 30, competition: 'cumcm', language: 'zh', problem_id: 'A; touch x' })
+      .includes("export PROBLEM_ID='A; touch x'"));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;

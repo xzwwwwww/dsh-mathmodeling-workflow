@@ -431,12 +431,12 @@ echo "赛题子问题数: $PROB_COUNT, 建模报告覆盖: $MODEL_SECTIONS"
 [ "$MODEL_SECTIONS" -lt "$PROB_COUNT" ] && echo "❌ 有子问题未建模！"
 
 # 2. 每个子问题是否有目标函数或模型公式
-OBJ_COUNT=$(grep -c '目标函数\|min\|max\|最小化\|最大化\|objective\|模型公式\|数学模型' MODELING_REPORT.md 2>/dev/null || echo 0)
+OBJ_COUNT=$(grep -c '目标函数\|min\|max\|最小化\|最大化\|objective\|模型公式\|数学模型' MODELING_REPORT.md 2>/dev/null || true); OBJ_COUNT=${OBJ_COUNT:-0}
 echo "目标函数/模型公式出现次数: $OBJ_COUNT"
 [ "$OBJ_COUNT" -eq 0 ] && echo "❌ 未找到任何目标函数或模型公式！"
 
 # 3. 约束条件（优化类必须有）
-CONSTRAINT_COUNT=$(grep -c '约束\|s\.t\.\|subject to\|限制条件\|≤\|≥' MODELING_REPORT.md 2>/dev/null || echo 0)
+CONSTRAINT_COUNT=$(grep -c '约束\|s\.t\.\|subject to\|限制条件\|≤\|≥' MODELING_REPORT.md 2>/dev/null || true); CONSTRAINT_COUNT=${CONSTRAINT_COUNT:-0}
 echo "约束条件出现次数: $CONSTRAINT_COUNT"
 
 # 4. 符号说明表是否存在
@@ -460,7 +460,7 @@ echo "   特别检查：新增的变量/资源/约束是否对目标函数有边
 echo "   如果没有 → 回到 PROBLEM_ANALYSIS.md 的假设预检重新审视。"
 
 # 9. 假设参数化检查
-PARAM_COUNT=$(grep -c '参数化:\|ALLOW_\|ENABLE_\|USE_\|开关变量' MODELING_REPORT.md 2>/dev/null || echo 0)
+PARAM_COUNT=$(grep -c '参数化:\|ALLOW_\|ENABLE_\|USE_\|开关变量' MODELING_REPORT.md 2>/dev/null || true); PARAM_COUNT=${PARAM_COUNT:-0}
 echo "假设参数化标记数: $PARAM_COUNT"
 [ "$PARAM_COUNT" -eq 0 ] && echo "⚠ 未找到假设参数化标记——关键假设应该在代码中做成可切换参数"
 ```

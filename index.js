@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.4.4';
+const BUILD = '0.4.5';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -127,20 +127,52 @@ export function apply(ctx, config = {}) {
       const info = await stat(inputDir).catch(() => null);
       if (!info?.isDirectory()) throw new Error(`赛题目录不存在或不是目录：${inputDir}`);
 
+      // 先扫描输入（在删除旧工作区之前）：宁可报“没有可用文件”，也不先把旧工作区删掉
+      const files = await scanInput(inputDir);
+      if (!files.length) throw new Error(`赛题目录里没有可用文件：${inputDir}`);
+
       const { switches, errors } = normalizeSwitches(args);
       if (errors.length) throw new Error(errors.join('；'));
 
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
       const defaultName = `modeling-${path.basename(inputDir).replace(/[^\w\u4e00-\u9fff-]+/g, '_')}-${stamp}`;
       const workspaceName = String(args.workspace_name ?? defaultName);
-      const workspace = path.join(base, workspaceName);
+      const workspace = path.resolve(base, workspaceName);
+      const relToBase = path.relative(base, workspace);
+      if (!relToBase || relToBase.startsWith('..') || path.isAbsolute(relToBase)) {
+        throw new Error(`workspace_name 必须是会话目录下的子目录名（不能是绝对路径或含 .. 逃逸）：${workspaceName}`);
+      }
       if (existsSync(workspace)) {
         if (!args.overwrite) throw new Error(`工作区已存在：${workspace}（要重建请传 overwrite=true）`);
+        // 安全删除：只删本插件创建的工作区（有 .mmw/state.json 且 workspace 名匹配），
+        // 且工作区不能与赛题目录互相包含（否则会删掉赛题/输入数据）
+        const statePath = path.join(workspace, '.mmw', 'state.json');
+        let ownWorkspace = false;
+        try {
+          const st = JSON.parse(await readFile(statePath, 'utf8'));
+          ownWorkspace = st?.workspace === path.basename(workspace);
+        } catch {
+          ownWorkspace = false;
+        }
+        if (!ownWorkspace) {
+          throw new Error(`拒绝删除：${workspace} 不是本插件创建的工作区（缺少有效 .mmw/state.json）`);
+        }
+        const [inputReal, workspaceReal, baseReal] = await Promise.all([
+          realpath(inputDir).catch(() => inputDir),
+          realpath(workspace).catch(() => workspace),
+          realpath(base).catch(() => base),
+        ]);
+        const inside = (ancestor, child) => {
+          const rel = path.relative(ancestor, child);
+          return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+        };
+        if (inside(inputReal, workspaceReal) || inside(workspaceReal, inputReal)) {
+          throw new Error(`拒绝删除：工作区与赛题目录重叠，input_dir 不能被删除或覆盖（${inputDir} ↔ ${workspace}）`);
+        }
+        if (workspaceReal === baseReal) throw new Error('拒绝删除会话目录本身');
         await rm(workspace, { recursive: true, force: true });
       }
 
-      const files = await scanInput(inputDir);
-      if (!files.length) throw new Error(`赛题目录里没有可用文件：${inputDir}`);
       const scan = summarizeScan(files);
 
       const steps = resolveSteps(switches);
@@ -155,6 +187,14 @@ export function apply(ctx, config = {}) {
         steps,
         title,
       });
+      // 记录用户显式传入的开关：modeling_switches 换赛项时据此重新推导 language/max_pages，
+      // 而不是沿用旧赛项推导出来的默认值（例如 cumcm 的 zh/30 被带进 mcm）
+      state.explicitSwitches = Object.fromEntries(
+        Object.keys(DEFAULT_SWITCHES)
+          .filter((k) => args[k] !== undefined)
+          .map((k) => [k, args[k]]),
+      );
+      await writeState(workspace, state);
 
       const warnings = [];
       if (!scan.problemFiles.length) warnings.push('没检测到 PDF/DOCX 赛题文件，只找到文本/数据；请确认赛题原文在目录里');
@@ -572,7 +612,11 @@ export function apply(ctx, config = {}) {
       if (completed.length) {
         throw new Error(`已有步骤完成（${completed.map((s) => s.key).join(', ')}），不能改开关（改步骤集合会让索引错位）。请新建工作区。`);
       }
-      const { switches, errors } = normalizeSwitches({ ...state.switches, ...(args.switches ?? {}) });
+      // 以用户显式传入的开关为基底重新推导：换赛项时 language/max_pages 等默认值应跟着新赛项变，
+      // 不能把旧赛项推导出的 zh/30 当成用户显式设置带过去。
+      const explicit = { ...(state.explicitSwitches ?? {}), ...(args.switches ?? {}) };
+      const baseSwitches = state.explicitSwitches ? explicit : { ...state.switches, ...(args.switches ?? {}) };
+      const { switches, errors } = normalizeSwitches(baseSwitches);
       if (errors.length) throw new Error(errors.join('；'));
 
       const steps = resolveSteps(switches);
@@ -585,6 +629,7 @@ export function apply(ctx, config = {}) {
       await writeFile(path.join(workspace, '.env_skill'), buildEnvSkill(switches), 'utf8');
 
       state.switches = switches;
+      state.explicitSwitches = explicit;
       state.steps = steps.map((st) => ({
         key: st.key,
         title: st.title,

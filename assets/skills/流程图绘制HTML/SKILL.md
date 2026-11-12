@@ -849,7 +849,7 @@ fi
 
 # latex_includes.tex 含本 skill 图的 include（HTML + TikZ）
 if [ -s figures/latex_includes.tex ]; then
-    N=$(grep -c 'fig_roadmap\|fig_flow\|fig_arch\|fig_pipeline\|fig_framework\|tikz_' figures/latex_includes.tex 2>/dev/null || echo 0)
+    N=$(grep -c 'fig_roadmap\|fig_flow\|fig_arch\|fig_pipeline\|fig_framework\|tikz_' figures/latex_includes.tex 2>/dev/null || true); N=${N:-0}
     [ "$N" -gt 0 ] && echo "✅ latex_includes.tex 含 $N 条本 skill 图" || { echo "❌ latex_includes.tex 无本 skill 图 include"; GATE_FAIL=$((GATE_FAIL+1)); }
     # 有 TikZ PDF 时逐个核对 include（防漏）
     for tpdf in figures/tikz_diagrams.pdf figures/tikz_diagrams_*.pdf figures/tikz_*.pdf; do

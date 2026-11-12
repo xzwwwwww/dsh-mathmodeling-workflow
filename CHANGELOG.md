@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.5
+
+- **工作区删除边界（P1）**：`modeling_init` 先扫描输入再删旧工作区；`workspace_name` 必须位于会话目录内（拒绝绝对路径/`..` 逃逸）；`overwrite=true` 只删除带有效 `.mmw/state.json` 且 workspace 名匹配的工作区；拒绝删除与 `input_dir` 互相包含的目录（含 `input_dir` 本身）和会话目录本身。
+- **题号 Shell 注入（P1）**：`.env_skill` 与 CLAUDE.md 的 export 行统一用 Shell 单引号安全引用；`problem_id` 归一化时去掉控制字符并限制长度。`source .env_skill` 不再执行题号里的命令。
+- **严格模式数字核对（P1）**：数字边界从 Unicode `\w` 改为 ASCII 词边界，汉字旁的「成本为9876万元」不再漏检；正文**未提取到任何数字**时不再写 `DATA_CHECK_PASSED`，报告“无法核对”并失败。中文「5 张图 / 9 张表」与英文「3 sub-problems / 5 figures」等数量声明继续跳过。
+- **美赛页数与 COMAP 规则（P1）**：英文赛事正文默认目标改为 20 页；新增 `pageLimit=25` 总页数硬上限（含 Summary Sheet/目录/参考文献/附录，AI 使用报告另附）；`rich_mode` 对英文不再抬到 40–60 页；编译步新增 `pdf_pages` 闸门，按 `paper/main.log` 的实际 PDF 页数核对，超上限失败。
+- **跨问逻辑核对（P1）**：观测值改为按题号索引 `{problem_id: {quantity}}`，与 `cross_problem_check.py` 一致；Q3 的同名指标不再覆盖 Q2 导致漏判。
+- **切换赛项重新推导（P2）**：`modeling_switches` 记录用户显式传入的开关；换 `competition` 时 `language`/`max_pages` 按新赛项重新推导（cumcm→mcm 得到 en/20，而不是沿用 zh/30）。
+- **输入附件冲突（P2）**：`user_data/` 保留输入相对目录结构（`A/data.csv` 与 `A_data.csv` 不再合并），同名目标自动加序号。
+- **图验收按引擎（P2）**：0 字节文件不算产物；HTML 引擎要求非空 `.html` + `.pdf`，DrawIO 引擎要求非空 `.drawio` + `.pdf`，TikZ 要求 `.pdf`；空 HTML 不再通过流程图验收。
+- **编译自检脚本（P2）**：修复中英文编译/建模/图表技能里 `VAR=$(grep -c ... || echo 0)` 的双零问题（干净日志不再触发 `arithmetic syntax error`）。
+- smoke 新增：跨问按题号核对、美赛 PDF 页数上限、零字节 HTML、题号 Shell 引用等回归断言。
 ## 0.4.4
 
 - `paper_data_check.py` 只核对正文：排除英文模板的 `sections/A_code.tex`、`sections/B_*`（附录）、`sections/Z_ai_disclosure.tex`、`references`、`current_chapter.tex`；摘要（`0_*`）保留核对。修复英文论文因附录代码里的索引/常量数字导致数据核对误报。

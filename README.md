@@ -90,7 +90,7 @@ agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国�
 | `problem_id` | A/B/C… | 空 | 题号，写进参数和规则段 |
 | `title` | 任意字符串 | 空（取目录名） | 论文标题 / 赛题简称 |
 | `language` | `zh` / `en` | 按赛项自动（中文赛项 zh，MCM/ICM/APMCM 英文 en） | 论文语言：决定用中文还是英文论文/编译技能、图表标签语言、正文页数估算口径（中文 900 字/页，英文 2200 字符/页） |
-| `max_pages` | 正整数 | 赛项默认（多数 30，`apmcm_zh` 25） | **正文页数目标（下限）**：目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文上限 |
+| `max_pages` | 正整数 | 赛项默认（多数 30，`apmcm_zh` 25，英文赛事 20） | **正文页数目标（下限）**：目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文上限 |
 | `figure_style` | `default` / `nature` | `default` | 数据图风格：default=按工作区随机配色（去指纹）；nature=Nature 排版+深蓝主色 |
 | `flowchart_engine` | `drawio` / `html` | `drawio` | 流程图引擎：drawio 产物可拖拽编辑；html 布局更好、不可拖拽 |
 | `diagram_style` | `mono` / `plain` / `modern` | `mono` | 流程图版式，仅 html 引擎生效 |
@@ -159,13 +159,13 @@ agent 会回显类似：
 | LaTeX 模板 | cumcm / wuyi / … | `_templates/mcm`（mcmthesis）或 `_templates/apmcm`（apmcmthesis） |
 | 编译引擎 | XeLaTeX | pdflatex + bibtex |
 | 结构 | 摘要 → 正文 → 参考文献 → 附录 | Summary Sheet（300-400 词）→ TOC → Introduction → Model → Results → References → Appendix |
-| 页数口径 | 900 字/页 | 2200 字符/页（Summary/TOC/References/Appendix 不计） |
+| 页数口径 | 900 字/页 | 正文 2200 字符/页（Summary/TOC/References/Appendix 不计）；**总页数硬上限 25 页**（含摘要/目录/参考文献/附录，AI 报告另附），编译后按 PDF 实际页数验收 |
 | 图表标签 | 中文 | English |
 
 提示词示例：
 
 ```
-用建模插件跑：D:\2026美赛A，MCM A 题，正文 25 页，英文论文
+用建模插件跑：D:\2026美赛A，MCM A 题，正文 20 页，英文论文
 ```
 
 英文技能里的旧标记前缀已统一换成 `MMW_*`，与中文技能共用同一套 CLAUDE.md 标记（fast 模式、AI 声明、逐问流程等）。

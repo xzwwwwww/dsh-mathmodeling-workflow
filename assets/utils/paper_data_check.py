@@ -110,7 +110,7 @@ def strip_non_data(text: str, mode: str) -> str:
     return text
 
 
-NUMBER_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?![A-Za-z0-9_.])")
 SKIP_PREFIX = ("图", "表", "式", "第", "附录", "节", "章", "年", "月", "日", "页", "[", "(", "（", "【")
 SKIP_SUFFIX = ("页", "年", "月", "日", "章", "节", "图", "表", "式", "个", "条", "次", "步", "维")
 # 英文论文里的编号类前缀（Figure 3 / Table 2 / Section 4 / [12] 等），不当作数据
@@ -224,7 +224,18 @@ def write_checklist(workspace: Path, mode: str, sources, entries, pending):
 
 
 def write_report(workspace: Path, mode: str, sources, entries, numbers, pending):
-    passed = not pending
+    if numbers == 0:
+        passed = False
+        conclusion = (
+            "未通过：正文没有提取到任何数据性数字，无法核对数据真实性。"
+            "必须在正文/表格里引用 figures/*.json 的结果数据后重跑本脚本。"
+        )
+    elif pending:
+        passed = False
+        conclusion = f"未通过：有 {len(pending)} 个数字对不上 JSON，必须修改论文后重跑本脚本。"
+    else:
+        passed = True
+        conclusion = "通过：论文里的数据性数字都能在 JSON 找到来源。"
     lines = [
         "# 论文数据真实性核对报告",
         "",
@@ -240,8 +251,7 @@ def write_report(workspace: Path, mode: str, sources, entries, numbers, pending)
         "",
         "## 结论",
         "",
-        ("通过：论文里的数据性数字都能在 JSON 找到来源。" if passed else
-         f"未通过：有 {len(pending)} 个数字对不上 JSON，必须修改论文后重跑本脚本。"),
+        conclusion,
         "",
     ]
     if pending:

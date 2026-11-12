@@ -196,9 +196,9 @@ After each compilation, check `main.log` for CRITICAL errors. **You MUST fix ALL
 
 ```bash
 # Count critical errors
-MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted\|begin{document} ended by' paper/main.log 2>/dev/null || echo 0)
-LR_ERR=$(grep -c 'Not allowed in LR mode' paper/main.log 2>/dev/null || echo 0)
-UNDEF_CS=$(grep -c 'Undefined control sequence' paper/main.log 2>/dev/null || echo 0)
+MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted\|begin{document} ended by' paper/main.log 2>/dev/null || true); MATH_ERR=${MATH_ERR:-0}
+LR_ERR=$(grep -c 'Not allowed in LR mode' paper/main.log 2>/dev/null || true); LR_ERR=${LR_ERR:-0}
+UNDEF_CS=$(grep -c 'Undefined control sequence' paper/main.log 2>/dev/null || true); UNDEF_CS=${UNDEF_CS:-0}
 TOTAL_ERR=$((MATH_ERR + LR_ERR))
 echo "Math errors: $MATH_ERR, LR mode errors: $LR_ERR, Undefined CS: $UNDEF_CS"
 if [ "$TOTAL_ERR" -gt 0 ]; then
@@ -239,7 +239,7 @@ xelatex -interaction=nonstopmode main.tex
 xelatex -interaction=nonstopmode main.tex
 cd ..
 # Recheck
-MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted' paper/main.log 2>/dev/null || echo 0)
+MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted' paper/main.log 2>/dev/null || true); MATH_ERR=${MATH_ERR:-0}
 echo "Remaining math errors: $MATH_ERR"
 ```
 
@@ -746,7 +746,7 @@ AI_LISTS=0
 for f in paper/sections/*.tex; do
     [ -f "$f" ] || continue
     echo "$(basename $f)" | grep -qi 'appendix\|A_code' && continue
-    c=$(grep -c '\\begin{itemize}\|\\begin{enumerate}' "$f" 2>/dev/null || echo 0)
+    c=$(grep -c '\\begin{itemize}\|\\begin{enumerate}' "$f" 2>/dev/null || true); c=${c:-0}
     AI_LISTS=$((AI_LISTS+c))
 done
 [ "$AI_LISTS" -le 3 ] && echo "✅ AI patterns: $AI_LISTS lists" || { echo "❌ $AI_LISTS lists in body — convert to prose"; GATE_FAIL=$((GATE_FAIL+1)); }
@@ -767,7 +767,7 @@ OC=0
 for f in paper/sections/*.tex; do
     [ -f "$f" ] || continue
     for w in "首次提出" "首次发现" "完美" "最优的" "无可比拟" "前所未有" "开创性" "革命性"; do
-        c=$(grep -c "$w" "$f" 2>/dev/null || echo 0); OC=$((OC+c))
+        c=$(grep -c "$w" "$f" 2>/dev/null || true); c=${c:-0}; OC=$((OC+c))
     done
 done
 [ "$OC" -eq 0 ] && echo "✅ No overclaiming" || echo "⚠ $OC overclaiming instances"
