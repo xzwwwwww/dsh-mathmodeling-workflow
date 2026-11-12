@@ -111,11 +111,11 @@ def check_downstream_constraints(ledger: dict) -> list:
                     continue
                 lim_le = _as_float(imp.get("must_le"))
                 lim_ge = _as_float(imp.get("must_ge"))
-                if lim_le is not None and val > lim_le * (1 + _REL_TOL):
+                if lim_le is not None and val > lim_le + _REL_TOL * abs(lim_le):
                     fails.append(
                         f"[{up}→{tgt}] {up} 结论「{qty}={c.get('value')}」要求 {tgt} 满足 ≤{lim_le}，"
                         f"但 {tgt} 实际 {qty}={val:g} 越界。{('（'+note+'）') if note else ''}")
-                if lim_ge is not None and val < lim_ge * (1 - _REL_TOL):
+                if lim_ge is not None and val < lim_ge - _REL_TOL * abs(lim_ge):
                     fails.append(
                         f"[{up}→{tgt}] {up} 结论「{qty}={c.get('value')}」要求 {tgt} 满足 ≥{lim_ge}，"
                         f"但 {tgt} 实际 {qty}={val:g} 不足。{('（'+note+'）') if note else ''}")

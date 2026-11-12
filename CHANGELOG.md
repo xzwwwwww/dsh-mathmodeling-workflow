@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.7
+
+- **PDF 页数（P1）**：`pdf_pages` 不再因为明文里出现 1 个 `/Type /Page` 就提前返回；明文与全部 FlateDecode 对象流一起累计。增量保存/旋转首页的 35 页 PDF 不会误读成 1 页。
+- **附件台账核对（P1）**：编程实现技能按实际读取路径计算相对 `user_data/` 的键直接查 `DATA_PROFILE.json`；只有键缺失才按 basename 唯一兜底，同名多文件（`A/data.csv`、`B/data.csv`）必须报歧义，不能拿第一条记录核错文件。
+- **跨尺度数字（P1）**：100 倍换算只对叶子字段名整词匹配比例类（accuracy/rate/...）；父键 `problem_1` 含 "prob"、`duration_hours` 含 "ratio" 都不再放宽。`problem_1.cost=12` 对「1200 万元」、`duration_hours=12` 对「1200 小时」均被拦截。
+- **v0.4.5 迁移（P2）**：`explicitSwitches` 残缺（只有 figure_style 等）时用 `state.switches` 补全，连续两次改开关不再把 MCM/B/英文/25 页变回国赛/空题号/中文/30 页；换赛项仍重新推导语言与页数。
+- **Python 跨问检查（P2）**：`cross_problem_check.py` 的边界容差改为 `limit ± tol×|limit|`，与 JS 验收一致；`-10 ≤ -10` 通过、`-9` 失败。
+- **逐问图派发（P2）**：`flowchart_engine=html` + 逐问流程图 DrawIO 时，`paper-figure-html` 的 prompt 与 HTML 技能说明同步要求 `fig_flow_q*` 产出 `.drawio + .pdf`，不再要求 `.html`。
+- **会话目录是 junction（P2）**：删除保护只判断工作区**自身**是否链接（`lstat`），祖先目录是 junction（通过链接进入项目）时正常重建不再被误拒。
+- **模板选择（P2）**：英文论文模板只读已校验的 `$COMPETITION`，自定义要求里写 "Do not use the APMCM template" 不会误选 apmcmthesis；中文论文模板选择与赛后检查也改为 `$COMPETITION` 精确映射，不再搜索 CLAUDE.md 正文。
+- smoke 新增：PDF 明文+压缩流计数、模板只读 COMPETITION、相对路径台账、HTML 逐问 DrawIO 例外等断言。
 ## 0.4.6
 
 - **工作区路径安全（P1）**：路径包含判断按完整路径段（`..raw` 不再被误判为外部）；新建/重建时解析最近已存在祖先的真实路径，拒绝 junction/符号链接把工作区解析到会话外；拒绝删除链接型工作区；`input_dir` 与真实工作区重叠（含 `input_dir` 在工作区内）一律拒绝。

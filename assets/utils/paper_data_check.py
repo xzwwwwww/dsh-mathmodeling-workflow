@@ -168,11 +168,15 @@ def extract_numbers(text: str):
 def matches(number: float, decimals: int, percent: bool, entries) -> bool:
     """同尺度四舍五入容差 + 相对容差。
 
-    100 倍换算只在「论文数字明确带 %」或「字段名是比例类（accuracy/rate/...）」时允许；
+    100 倍换算只在「论文数字明确带 %」或「字段叶子名是比例类（accuracy/rate/...）」时允许；
+    只看叶子键、且整词匹配（父键 problem_1 含 "prob"、duration_hours 含 "ratio" 都不算），
     普通金额/人数/距离（JSON 12 vs 正文 1200）绝不跨尺度匹配。
     """
     half = 0.5 * (10 ** -decimals)
-    ratio_key = re.compile(r"percent|rate|ratio|accuracy|precision|recall|f1|auc|prob|share|coverage", re.I)
+    ratio_field = re.compile(
+        r"^(?:percent|percentage|rate|ratio|accuracy|precision|recall|f1|f1_score|auc|prob|probability|share|coverage|pct)$",
+        re.I,
+    )
     for _, key, data_value in entries:
         if percent:
             # 论文写 97.0%：JSON 存 0.97（小数）或 97（百分数值）都接受
@@ -183,8 +187,9 @@ def matches(number: float, decimals: int, percent: bool, entries) -> bool:
             continue
         if abs(number - data_value) <= max(half, TOLERANCE * abs(data_value)):
             return True
-        # 只对比例类字段容忍“漏写 % 号”的 100 倍差异
-        if isinstance(key, str) and ratio_key.search(key):
+        # 只对比例类字段（叶子键整词匹配）容忍“漏写 % 号”的 100 倍差异
+        leaf = re.sub(r"\[.*$", "", str(key).split(".")[-1])
+        if ratio_field.fullmatch(leaf):
             if abs(number - data_value / 100.0) <= max(half, TOLERANCE * abs(data_value / 100.0)):
                 return True
             if abs(number / 100.0 - data_value) <= max(half / 100.0, TOLERANCE * abs(data_value)):

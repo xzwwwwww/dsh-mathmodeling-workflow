@@ -163,10 +163,23 @@ CC=$?   # 0=通过 1=HARD FAIL(名不副实,必修) 2=缺文件跳过
 3. **读完对 `DATA_PROFILE.json` 核行数（基准来自机器建档，不手填、不靠记忆）**：赛题分析 阶段 `data_profile.py` 已把每个文件的 `total_rows`/`n_sheets`/各 sheet 行数探测好落盘。数据加载末尾**从这份档读基准值**做断言，实读行数对不上（被截断/漏表）立即 `raise`、中止编码，禁止带残缺往下跑。关键标签列再 `assert df[label_col].notna().any()`（整列全空 = 那张标签表根本没读进来）。
    ```python
    # 数据加载末尾 —— 摄入完整性断言（基准从 DATA_PROFILE.json 取，只 print 结论，遵守 Step 4.5 规则 B）
-   import json
+   import json, os
    _files = json.load(open('DATA_PROFILE.json', encoding='utf-8'))['files']
-   # 键是相对路径（如 A/data.csv）：按 basename 找，子目录里的同名文件也能唯一命中当前文件
-   _prof = next((v for k, v in _files.items() if v.get('basename') == fname or k.split('/')[-1] == fname), {})
+   # fname = 实际读取路径（如 'A/data.csv' / 'user_data/A/data.csv' / 绝对路径）。
+   # 先算相对 user_data 的台账键；只有键缺失时才按 basename 唯一兜底，同名多文件必须报歧义。
+   _rel = fname.replace('\\', '/')
+   if _rel.startswith('user_data/'):
+       _rel = _rel[len('user_data/'):]
+   elif os.path.isabs(fname):
+       _rel = os.path.relpath(fname, 'user_data').replace(os.sep, '/')
+   _prof = _files.get(_rel)
+   if _prof is None:
+       _same = {k: v for k, v in _files.items()
+                if v.get('basename') == os.path.basename(fname) or k.split('/')[-1] == os.path.basename(fname)}
+       assert len(_same) == 1, (
+           f"[未建档/歧义] {fname} 在 DATA_PROFILE.json 匹配到 {len(_same)} 条同名记录；"
+           f"请按相对 user_data 的路径（如 A/data.csv）读取，并用同一相对路径查台账。")
+       _prof = next(iter(_same.values()))
    # 先确认该文件建档成功（建档失败的只有 error 键、无 total_rows）——报错说人话，别抛裸 KeyError
    assert 'total_rows' in _prof, (
        f"[未建档] {fname} 不在 DATA_PROFILE.json 或建档失败（{_prof.get('error','缺记录')}）——"

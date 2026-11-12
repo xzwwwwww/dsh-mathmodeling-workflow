@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.4.6';
+const BUILD = '0.4.7';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -176,9 +176,11 @@ export function apply(ctx, config = {}) {
       }
       if (existsSync(workspace)) {
         if (!args.overwrite) throw new Error(`工作区已存在：${workspace}（要重建请传 overwrite=true）`);
-        // 拒绝删除符号链接/junction（可能指向会话外目录；rm 递归会误删真实目标）
-        const linkReal = await realpath(workspace).catch(() => workspace);
-        if (!samePath(linkReal, workspace)) {
+        // 只拒绝“工作区自身”是符号链接/junction 的情况；
+        // 会话目录本身是 junction（通过链接进入项目）属于正常，不能把祖先链接误判成工作区链接。
+        const wsLstat = await lstat(workspace).catch(() => null);
+        if (wsLstat?.isSymbolicLink()) {
+          const linkReal = await realpath(workspace).catch(() => workspace);
           throw new Error(`拒绝删除：工作区是符号链接/目录联接，可能指向会话外目录：${workspace} → ${linkReal}`);
         }
         // 安全删除：只删本插件创建的工作区（有 .mmw/state.json 且 workspace 名匹配），
@@ -641,11 +643,18 @@ export function apply(ctx, config = {}) {
       if (completed.length) {
         throw new Error(`已有步骤完成（${completed.map((s) => s.key).join(', ')}），不能改开关（改步骤集合会让索引错位）。请新建工作区。`);
       }
-      // 以用户显式传入的开关为基底重新推导：换赛项时 language/max_pages 等默认值应跟着新赛项变，
-      // 不能把旧赛项推导出的 zh/30 当成用户显式设置带过去。
-      // 旧工作区（没有 explicitSwitches 字段）首次迁移：把完整旧配置当基线保存，
-      // 否则第一次改动只记下本次 args，第二次调用会丢掉其余配置。
-      const explicitBase = state.explicitSwitches ?? state.switches;
+      // 以用户显式传入的开关为基底重新推导：换赛项时 language/max_pages 等默认值应跟着新赛项变。
+      // 旧工作区迁移：v0.4.4 没有 explicitSwitches；v0.4.5 只写入了残缺字段（如仅 figure_style）。
+      // 两种情况都用 state.switches 补全缺失配置，避免第二次改开关把赛项/题号/语言/页数丢掉。
+      const prior = state.explicitSwitches;
+      const incomplete = !prior || !['competition', 'language', 'max_pages'].every((k) => k in prior);
+      let explicitBase = incomplete ? { ...state.switches, ...(prior ?? {}) } : prior;
+      // 换赛项且本次没显式指定语言/页数 → 删掉基线里的旧值，让 normalize 按新赛项重新推导
+      if (args.switches?.competition && args.switches.competition !== state.switches.competition) {
+        explicitBase = { ...explicitBase };
+        if (args.switches.language === undefined) delete explicitBase.language;
+        if (args.switches.max_pages === undefined) delete explicitBase.max_pages;
+      }
       const explicit = { ...explicitBase, ...(args.switches ?? {}) };
       const { switches, errors } = normalizeSwitches(explicit);
       if (errors.length) throw new Error(errors.join('；'));

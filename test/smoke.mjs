@@ -504,7 +504,21 @@ async function main() {
   const dataProfile = await readFile(path.join(ASSETS, 'utils', 'data_profile.py'), 'utf8');
   check('data_profile 递归扫描子目录', dataProfile.includes('"**"') || dataProfile.includes("'**'"));
   const pdcSrc = await readFile(path.join(ASSETS, 'utils', 'paper_data_check.py'), 'utf8');
-  check('数据核对的比例换算受字段类型限制', pdcSrc.includes('ratio_key'));
+  check('数据核对的比例换算受字段类型限制', pdcSrc.includes('ratio_field') && pdcSrc.includes('fullmatch(leaf)'));
+
+  const enPaperSkill = await readFile(path.join(ASSETS, 'skills', '论文撰写English', 'SKILL.md'), 'utf8');
+  check('英文模板选择只读 $COMPETITION', enPaperSkill.includes('[ "$COMPETITION" = "apmcm" ]')
+    && !enPaperSkill.includes('grep -qi "apmcm" CLAUDE.md'));
+  const zhPaperSkill = await readFile(path.join(ASSETS, 'skills', '论文撰写', 'SKILL.md'), 'utf8');
+  check('中文模板选择用 $COMPETITION 映射', zhPaperSkill.includes('case "$COMPETITION" in'));
+  const coderSkill = await readFile(path.join(ASSETS, 'skills', '编程实现', 'SKILL.md'), 'utf8');
+  check('编程步按相对路径查数据台账', coderSkill.includes('_files.get(_rel)'));
+  const htmlSkill = await readFile(path.join(ASSETS, 'skills', '流程图绘制HTML', 'SKILL.md'), 'utf8');
+  check('HTML 技能注明 DrawIO 逐问图的例外', htmlSkill.includes('MMW_PER_PROBLEM_FLOW_STYLE=drawio'));
+  const gatesSrc = await readFile(new URL('../lib/gates.js', import.meta.url), 'utf8').catch(() => '');
+  check('PDF 页数同时统计明文与压缩流',
+    gatesSrc.includes('明文 + 所有解压流') && gatesSrc.includes('count += (out.match(pageRe)')
+      && !gatesSrc.includes('if (count) return count'));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;

@@ -231,52 +231,32 @@ Resume rules: only write placeholder sections (<500 chars or contains "待补充
 ```bash
 mkdir -p paper/sections
 # Select template based on competition type — copy entire folder (tex + cls + fonts)
+source .env_skill 2>/dev/null || true
 TMPL_BASE="_templates"
 [ -d "$TMPL_BASE" ] || TMPL_BASE="templates"
 
-if [ "$COMPETITION" = "stats" ] || echo "$ARGUMENTS" | grep -qi "统计建模\|stats"; then
-    echo "Using stats template"
-    cp "$TMPL_BASE/stats/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "apmcm_zh\|亚太.*中文\|亚太赛中文" || grep -qi "apmcm_zh\|亚太.*中文\|亚太赛中文" CLAUDE.md 2>/dev/null; then
-    echo "Using APMCM (Chinese) template (MathorCupmodeling.cls)"
-    cp "$TMPL_BASE/apmcm_zh/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "mathorcup\|MathorCup\|mathor" || grep -qi "mathorcup" CLAUDE.md 2>/dev/null; then
-    echo "Using MathorCup template"
-    cp "$TMPL_BASE/mathorcup/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "huazhong\|华中杯" || grep -qi "huazhong\|华中杯" CLAUDE.md 2>/dev/null; then
-    echo "Using huazhong template"
-    cp "$TMPL_BASE/huazhong/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "huawei\|华为杯" || \
-     grep -qE "^## 竞赛规则.*华为杯|^- 赛事:\s*comp_huawei" CLAUDE.md 2>/dev/null; then
-    # ⛔ 模板选择必须精确：只在"## 竞赛规则（华为杯...）"标题行或显式 "- 赛事: comp_huawei" 命中
-    # 不能用泛泛的 `grep huawei CLAUDE.md` — 丰满模式 / 其他描述文字可能含"华为杯"字眼误触发
-    echo "Using huawei template"
-    cp "$TMPL_BASE/huawei/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "wuyi\|五一杯" || grep -qi "wuyi\|五一杯" CLAUDE.md 2>/dev/null; then
-    echo "Using wuyi template"
-    cp "$TMPL_BASE/wuyi/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "cumcm\|国赛" || grep -qi "cumcm\|国赛" CLAUDE.md 2>/dev/null; then
-    echo "Using cumcm template"
-    cp "$TMPL_BASE/cumcm/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "changsanjiao\|长三角" || grep -qi "changsanjiao\|长三角" CLAUDE.md 2>/dev/null; then
-    echo "Using changsanjiao template"
-    cp "$TMPL_BASE/changsanjiao/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "huashu\|华数杯" || grep -qi "huashu\|华数杯" CLAUDE.md 2>/dev/null; then
-    echo "Using huashubei template"
-    cp "$TMPL_BASE/huashubei/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "diangong\|电工杯" || grep -qi "diangong\|电工杯" CLAUDE.md 2>/dev/null; then
-    echo "Using diangongbei template"
-    cp "$TMPL_BASE/diangongbei/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "dongsansheng\|东三省\|辽宁" || grep -qi "dongsansheng\|东三省\|辽宁" CLAUDE.md 2>/dev/null; then
-    echo "Using dongsansheng template"
-    cp "$TMPL_BASE/dongsansheng/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "shuwei\|数维杯" || grep -qi "shuwei\|数维杯" CLAUDE.md 2>/dev/null; then
-    echo "Using shuweibei template"
-    cp "$TMPL_BASE/shuweibei/"* paper/ 2>/dev/null
-else
-    echo "Using default template"
-    cp "$TMPL_BASE/default/"* paper/ 2>/dev/null
+# ⛔ 模板选择只读已校验的 $COMPETITION（来自 .env_skill），不搜索 CLAUDE.md 正文：
+# 自定义要求里写 "不要用华为杯/亚太模板" 不能反过来触发对应分支。
+if [ -z "$COMPETITION" ] && echo "$ARGUMENTS" | grep -qi "统计建模\|stats"; then
+    COMPETITION=stats
 fi
+case "$COMPETITION" in
+    stats)        TPL=stats ;;
+    apmcm_zh)     TPL=apmcm_zh ;;
+    mathorcup)    TPL=mathorcup ;;
+    huazhong)     TPL=huazhong ;;
+    huawei)       TPL=huawei ;;
+    wuyi)         TPL=wuyi ;;
+    cumcm)        TPL=cumcm ;;
+    yangtze)      TPL=changsanjiao ;;
+    huashu)       TPL=huashubei ;;
+    diangong)     TPL=diangongbei ;;
+    liaoning)     TPL=dongsansheng ;;
+    shuwei)       TPL=shuweibei ;;
+    *)            TPL=default ;;
+esac
+echo "Using $TPL template"
+cp "$TMPL_BASE/$TPL/"* paper/ 2>/dev/null
 # Rename to main.tex if needed
 [ -f paper/main.tex ] && echo "Template copied: $(wc -l < paper/main.tex) lines" || echo "ERROR: template not found!"
 ```
@@ -363,7 +343,8 @@ Use the template as-is. Only modify:
 
    ```bash
    # 仅华为杯触发以下标题检查（其他竞赛跳过）
-   if grep -qi "huawei\|华为杯" CLAUDE.md 2>/dev/null; then
+   source .env_skill 2>/dev/null || true
+   if [ "$COMPETITION" = "huawei" ]; then
        title_line=$(grep -oE '\\title\{[^}]+\}' paper/main.tex | head -1)
        echo "[华为杯] Title: $title_line"
 
@@ -1427,27 +1408,28 @@ grep -q 'thebibliography\|bibliography{' paper/main.tex && { echo "✅ 参考文
 grep -q 'appendices\|\\\\appendix' paper/main.tex && { echo "✅ 附录"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ 缺少附录"; TMPL_FAIL=$((TMPL_FAIL+1)); }
 grep -q 'superscript\|\\@cite\|setcitestyle.*super' paper/main.tex && { echo "✅ 上标引用"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ 缺少上标引用定义"; TMPL_FAIL=$((TMPL_FAIL+1)); }
 
+source .env_skill 2>/dev/null || true
 # 五一杯特有检查
-if grep -qi 'wuyi\|五一杯' CLAUDE.md 2>/dev/null; then
+if [ "$COMPETITION" = "wuyi" ]; then
     grep -q '承诺书' paper/main.tex && { echo "✅ 五一杯承诺书页"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ 五一杯缺少承诺书页"; TMPL_FAIL=$((TMPL_FAIL+1)); }
     grep -q 'image2' paper/main.tex && { echo "✅ 五一杯封面logo"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ 五一杯缺少封面logo"; TMPL_FAIL=$((TMPL_FAIL+1)); }
     grep -q '关键词' paper/main.tex && { echo "✅ 五一杯关键词"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ 五一杯缺少关键词"; TMPL_FAIL=$((TMPL_FAIL+1)); }
 fi
 
 # MathorCup 特有检查
-if grep -qi 'mathorcup' CLAUDE.md 2>/dev/null; then
+if [ "$COMPETITION" = "mathorcup" ]; then
     grep -q 'MathorCupmodeling' paper/main.tex && { echo "✅ MathorCup cls"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ MathorCup 未使用正确 cls"; TMPL_FAIL=$((TMPL_FAIL+1)); }
     grep -q '\\bianhao\|\\tihao\|\\timu' paper/main.tex && { echo "✅ MathorCup 队伍信息"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ MathorCup 缺少队伍信息"; TMPL_FAIL=$((TMPL_FAIL+1)); }
 fi
 
 # 亚太赛中文 (APMCM) 特有检查 — 复用 MathorCupmodeling 文档类
-if grep -qi 'apmcm_zh\|亚太.*中文\|亚太赛中文' CLAUDE.md 2>/dev/null; then
+if [ "$COMPETITION" = "apmcm_zh" ]; then
     grep -q 'MathorCupmodeling' paper/main.tex && { echo "✅ APMCM(中文) cls"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ APMCM(中文) 未使用正确 cls (应为 MathorCupmodeling)"; TMPL_FAIL=$((TMPL_FAIL+1)); }
     grep -q '\\bianhao\|\\tihao\|\\timu' paper/main.tex && { echo "✅ APMCM(中文) 队伍信息"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ APMCM(中文) 缺少队伍信息"; TMPL_FAIL=$((TMPL_FAIL+1)); }
 fi
 
 # 华中杯特有检查
-if grep -qi 'huazhong\|华中杯' CLAUDE.md 2>/dev/null; then
+if [ "$COMPETITION" = "huazhong" ]; then
     grep -q 'cumcmthesis' paper/main.tex && { echo "✅ 华中杯 cls"; TMPL_OK=$((TMPL_OK+1)); } || { echo "❌ 华中杯未使用 cumcmthesis"; TMPL_FAIL=$((TMPL_FAIL+1)); }
 fi
 

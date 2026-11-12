@@ -100,12 +100,12 @@ mkdir -p paper/sections
 TMPL_BASE="_templates"
 [ -d "$TMPL_BASE" ] || TMPL_BASE="templates"
 
-# ⛔ 模板选择只读已校验的 $COMPETITION / CLAUDE.md，不要用 $ARGUMENTS（用户可控文本）
-if [ "$COMPETITION" = "apmcm" ] || grep -qi "apmcm" CLAUDE.md 2>/dev/null; then
-    # ⛔ APMCM 必须先判：字符串 "APMCM" 里含子串 "MCM"，先判 mcm 会误用 mcmthesis 模板
+# ⛔ 模板选择只读已校验的 $COMPETITION（来自 .env_skill），不搜索 CLAUDE.md 正文：
+# 自定义要求里出现 "Do not use the APMCM template" 不能反过来触发 APMCM 分支。
+if [ "$COMPETITION" = "apmcm" ]; then
     echo "Using APMCM template"
     cp "$TMPL_BASE/apmcm/"* paper/ 2>/dev/null
-elif [ "$COMPETITION" = "mcm" ] || [ "$COMPETITION" = "icm" ] || grep -qi "mcm\|icm" CLAUDE.md 2>/dev/null; then
+elif [ "$COMPETITION" = "mcm" ] || [ "$COMPETITION" = "icm" ]; then
     echo "Using MCM template"
     cp "$TMPL_BASE/mcm/"* paper/ 2>/dev/null
 else
