@@ -159,7 +159,7 @@ agent 会回显类似：
 | LaTeX 模板 | cumcm / wuyi / … | `_templates/mcm`（mcmthesis）或 `_templates/apmcm`（apmcmthesis） |
 | 编译引擎 | XeLaTeX | pdflatex + bibtex |
 | 结构 | 摘要 → 正文 → 参考文献 → 附录 | Summary Sheet（300-400 词）→ TOC → Introduction → Model → Results → References → Appendix |
-| 页数口径 | 900 字/页 | 正文 2200 字符/页（Summary/TOC/References/Appendix 不计）；**总页数硬上限 25 页**（含摘要/目录/参考文献/附录，AI 报告另附），编译后按 PDF 实际页数验收 |
+| 页数口径 | 900 字/页 | 正文 2200 字符/页（Summary/TOC/References/Appendix 不计）；**MCM/ICM 总页数硬上限 25 页**（含摘要/目录/参考文献/附录，AI 报告另附），编译后按 PDF 实际页数验收；APMCM 按官网模板，无 25 页硬上限 |
 | 图表标签 | 中文 | English |
 
 提示词示例：

@@ -93,11 +93,10 @@ def main() -> int:
     ap.add_argument("--out", default="DATA_PROFILE.json")
     args = ap.parse_args()
 
-    files = sorted(
-        glob.glob(os.path.join(args.datadir, "*.csv"))
-        + glob.glob(os.path.join(args.datadir, "*.xlsx"))
-        + glob.glob(os.path.join(args.datadir, "*.xls"))
-    )
+    files = []
+    for pattern in ("*.csv", "*.xlsx", "*.xls"):
+        files.extend(glob.glob(os.path.join(args.datadir, "**", pattern), recursive=True))
+    files = sorted(set(files))
     if not files:
         print(f"[data_profile] {args.datadir}/ 下无 csv/xlsx/xls，无需建档（纯建模题）")
         # 仍写一份空档，让下游"有没有数据"这件事也有据可查
@@ -107,16 +106,19 @@ def main() -> int:
 
     profile, n_err = {}, 0
     for f in files:
-        base = os.path.basename(f)
+        # 台账键用相对路径（保留 user_data/A/data.csv 这类子目录结构，同名文件不会互相覆盖）
+        rel = os.path.relpath(f, args.datadir).replace(os.sep, "/")
         try:
             info = _profile_csv(f) if f.lower().endswith(".csv") else _profile_excel(f)
             info["sha256"] = _sha256(f)
             info["bytes"] = os.path.getsize(f)
         except Exception as e:
             info = {"error": f"{type(e).__name__}: {e}"}
+        info["basename"] = os.path.basename(f)
+        info["path"] = rel
         if "error" in info:
             n_err += 1
-        profile[base] = info
+        profile[rel] = info
 
     out = {"_meta": {"n_files": len(files), "n_error": n_err}, "files": profile}
     json.dump(out, open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)

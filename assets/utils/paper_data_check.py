@@ -166,19 +166,29 @@ def extract_numbers(text: str):
 
 
 def matches(number: float, decimals: int, percent: bool, entries) -> bool:
-    """同尺度四舍五入容差 + 0.5% 相对容差；百分数按 /100 后再比。"""
+    """同尺度四舍五入容差 + 相对容差。
+
+    100 倍换算只在「论文数字明确带 %」或「字段名是比例类（accuracy/rate/...）」时允许；
+    普通金额/人数/距离（JSON 12 vs 正文 1200）绝不跨尺度匹配。
+    """
     half = 0.5 * (10 ** -decimals)
-    target = number / 100.0 if percent else number
-    half = half / 100.0 if percent else half
-    for _, _, data_value in entries:
-        if abs(target - data_value) <= max(half, TOLERANCE * abs(data_value)):
+    ratio_key = re.compile(r"percent|rate|ratio|accuracy|precision|recall|f1|auc|prob|share|coverage", re.I)
+    for _, key, data_value in entries:
+        if percent:
+            # 论文写 97.0%：JSON 存 0.97（小数）或 97（百分数值）都接受
+            if abs(number / 100.0 - data_value) <= max(half / 100.0, TOLERANCE * abs(data_value)):
+                return True
+            if abs(number - data_value) <= max(half, TOLERANCE * abs(data_value)):
+                return True
+            continue
+        if abs(number - data_value) <= max(half, TOLERANCE * abs(data_value)):
             return True
-        # JSON 存百分数（94.1）而论文写小数（0.941）
-        if not percent and abs(number - data_value / 100.0) <= max(half, TOLERANCE * abs(data_value / 100.0)):
-            return True
-        # JSON 存小数（0.9412）而论文写百分数但漏了 % 号
-        if not percent and abs(number / 100.0 - data_value) <= max(half / 100.0, TOLERANCE * abs(data_value)):
-            return True
+        # 只对比例类字段容忍“漏写 % 号”的 100 倍差异
+        if isinstance(key, str) and ratio_key.search(key):
+            if abs(number - data_value / 100.0) <= max(half, TOLERANCE * abs(data_value / 100.0)):
+                return True
+            if abs(number / 100.0 - data_value) <= max(half / 100.0, TOLERANCE * abs(data_value)):
+                return True
     return False
 
 

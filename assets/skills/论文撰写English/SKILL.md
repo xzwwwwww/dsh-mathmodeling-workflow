@@ -95,15 +95,17 @@ Resume: only write placeholder sections, skip completed ones (>2000 chars). Save
 ### Step 1: Select template
 
 ```bash
+source .env_skill 2>/dev/null || true
 mkdir -p paper/sections
 TMPL_BASE="_templates"
 [ -d "$TMPL_BASE" ] || TMPL_BASE="templates"
 
-if echo "$ARGUMENTS" | grep -qi "apmcm\|亚太" || grep -qi "apmcm" CLAUDE.md 2>/dev/null; then
+# ⛔ 模板选择只读已校验的 $COMPETITION / CLAUDE.md，不要用 $ARGUMENTS（用户可控文本）
+if [ "$COMPETITION" = "apmcm" ] || grep -qi "apmcm" CLAUDE.md 2>/dev/null; then
     # ⛔ APMCM 必须先判：字符串 "APMCM" 里含子串 "MCM"，先判 mcm 会误用 mcmthesis 模板
     echo "Using APMCM template"
     cp "$TMPL_BASE/apmcm/"* paper/ 2>/dev/null
-elif echo "$ARGUMENTS" | grep -qi "mcm\|icm" || grep -qi "mcm\|icm" CLAUDE.md 2>/dev/null; then
+elif [ "$COMPETITION" = "mcm" ] || [ "$COMPETITION" = "icm" ] || grep -qi "mcm\|icm" CLAUDE.md 2>/dev/null; then
     echo "Using MCM template"
     cp "$TMPL_BASE/mcm/"* paper/ 2>/dev/null
 else

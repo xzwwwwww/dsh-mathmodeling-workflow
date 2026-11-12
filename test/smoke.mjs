@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { normalizeSwitches, summarizeSwitches, COMPETITION_KEYS, perProblemFlowStyle } from '../lib/switches.js';
+import { normalizeSwitches, summarizeSwitches, COMPETITION_KEYS, COMPETITIONS, perProblemFlowStyle } from '../lib/switches.js';
 import { resolveSteps } from '../lib/steps.js';
 import { scanInput, summarizeScan } from '../lib/scan.js';
 import { scaffoldWorkspace, readSkillBody, syncTemplates } from '../lib/scaffold.js';
@@ -470,6 +470,41 @@ async function main() {
   check('题号写入 .env_skill 时做 Shell 引用',
     buildEnvSkill({ max_pages: 30, competition: 'cumcm', language: 'zh', problem_id: 'A; touch x' })
       .includes("export PROBLEM_ID='A; touch x'"));
+
+  // 19) 复审回归：APMCM 无 25 页上限 / 负数边界 / HTML+DrawIO 逐问 / 公共脚本双零
+  check('APMCM 不设 25 页硬上限', COMPETITIONS.apmcm.pageLimit === undefined);
+  check('MCM/ICM 仍有 25 页硬上限', COMPETITIONS.mcm.pageLimit === 25 && COMPETITIONS.icm.pageLimit === 25);
+  check('prompt 的 $ARGUMENTS 是固定安全串', prompt.includes('competition-paper（赛题与要求见 CLAUDE.md 与 user_data/）'));
+
+  const negWs = path.join(TMP, 'neg_ws');
+  await mkdir(negWs, { recursive: true });
+  await writeFile(path.join(negWs, 'CROSS_PROBLEM_LEDGER.json'), JSON.stringify({
+    problems: [
+      { id: 'Q1', observed: {}, conclusions: [{ quantity: 'temp', imposes: { on: ['Q2'], must_le: -10 } }] },
+      { id: 'Q2', observed: { temp: -10 } },
+    ],
+  }), 'utf8');
+  const negGate = await runGates(negWs, { key: 'comp-modeling', gates: ['logic'] });
+  check('负数边界 -10 ≤ -10 不误报', negGate.ok === true, JSON.stringify(negGate.results[0].detail));
+
+  const flowHtmlWs = path.join(TMP, 'flow_html_ws');
+  await mkdir(path.join(flowHtmlWs, 'figures'), { recursive: true });
+  await writeFile(path.join(flowHtmlWs, 'PROBLEM_ANALYSIS.md'), [
+    '<!-- BEGIN FIGURE_MANIFEST -->', '**数据图**', '- fig_q1_trend', '**流程图**', '- fig_flow_q1', '<!-- END FIGURE_MANIFEST -->',
+  ].join('\n'), 'utf8');
+  await writeFile(path.join(flowHtmlWs, 'CLAUDE.md'), 'MMW_FLOW_PER_PROBLEM=1\nMMW_PER_PROBLEM_FLOW_STYLE=drawio\n', 'utf8');
+  await writeFile(path.join(flowHtmlWs, 'figures', 'fig_q1_trend.pdf'), 'pdf', 'utf8');
+  await writeFile(path.join(flowHtmlWs, 'figures', 'fig_flow_q1.drawio'), '<mxfile/>', 'utf8');
+  await writeFile(path.join(flowHtmlWs, 'figures', 'fig_flow_q1.pdf'), '%PDF', 'utf8');
+  const flowHtmlGate = await gateFigures(flowHtmlWs, { key: 'paper-figure-html', gates: ['figures'] });
+  check('HTML 引擎下 DrawIO 逐问图按 .drawio+.pdf 验收', flowHtmlGate.ok === true, JSON.stringify(flowHtmlGate.detail));
+
+  const compileCheck = await readFile(path.join(ASSETS, 'utils', 'compile_check.sh'), 'utf8');
+  check('compile_check.sh 无 grep -c 双零写法', !compileCheck.includes('|| echo 0'));
+  const dataProfile = await readFile(path.join(ASSETS, 'utils', 'data_profile.py'), 'utf8');
+  check('data_profile 递归扫描子目录', dataProfile.includes('"**"') || dataProfile.includes("'**'"));
+  const pdcSrc = await readFile(path.join(ASSETS, 'utils', 'paper_data_check.py'), 'utf8');
+  check('数据核对的比例换算受字段类型限制', pdcSrc.includes('ratio_key'));
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
   process.exitCode = failures === 0 ? 0 : 1;

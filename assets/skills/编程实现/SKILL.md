@@ -164,7 +164,9 @@ CC=$?   # 0=通过 1=HARD FAIL(名不副实,必修) 2=缺文件跳过
    ```python
    # 数据加载末尾 —— 摄入完整性断言（基准从 DATA_PROFILE.json 取，只 print 结论，遵守 Step 4.5 规则 B）
    import json
-   _prof = json.load(open('DATA_PROFILE.json', encoding='utf-8'))['files'].get(fname, {})
+   _files = json.load(open('DATA_PROFILE.json', encoding='utf-8'))['files']
+   # 键是相对路径（如 A/data.csv）：按 basename 找，子目录里的同名文件也能唯一命中当前文件
+   _prof = next((v for k, v in _files.items() if v.get('basename') == fname or k.split('/')[-1] == fname), {})
    # 先确认该文件建档成功（建档失败的只有 error 键、无 total_rows）——报错说人话，别抛裸 KeyError
    assert 'total_rows' in _prof, (
        f"[未建档] {fname} 不在 DATA_PROFILE.json 或建档失败（{_prof.get('error','缺记录')}）——"

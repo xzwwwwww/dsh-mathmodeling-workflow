@@ -31,7 +31,7 @@ else
 fi
 
 # 2. Undefined references
-undef_refs=$(grep -c '\[?\]' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+undef_refs=$(grep -c '\[?\]' "$PAPER_DIR/main.log" 2>/dev/null || true); undef_refs=${undef_refs:-0}
 echo "  Undefined references: $undef_refs"
 [ "$undef_refs" -gt 0 ] && echo "  FAIL: $undef_refs undefined references — PDF shows [?]" && EXIT_CODE=1
 
@@ -40,15 +40,15 @@ echo "--- LaTeX errors ---"
 LATEX_ERRORS=0
 if [ -f "$PAPER_DIR/main.log" ]; then
     # Bad math environment delimiter
-    bad_math=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted\|Display math should end\|begin{document} ended by' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+    bad_math=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted\|Display math should end\|begin{document} ended by' "$PAPER_DIR/main.log" 2>/dev/null || true); bad_math=${bad_math:-0}
     [ "$bad_math" -gt 0 ] && echo "  CRITICAL: $bad_math math environment errors — fix \$...\$ delimiters in .tex files" && LATEX_ERRORS=$((LATEX_ERRORS + bad_math))
 
     # Not allowed in LR mode (usually math in wrong context)
-    lr_mode=$(grep -c 'Not allowed in LR mode\|Not in outer par mode' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+    lr_mode=$(grep -c 'Not allowed in LR mode\|Not in outer par mode' "$PAPER_DIR/main.log" 2>/dev/null || true); lr_mode=${lr_mode:-0}
     [ "$lr_mode" -gt 0 ] && echo "  CRITICAL: $lr_mode LR mode errors — check math/float placement" && LATEX_ERRORS=$((LATEX_ERRORS + lr_mode))
 
     # Undefined control sequence (missing package or typo)
-    undef_cs=$(grep -c 'Undefined control sequence' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+    undef_cs=$(grep -c 'Undefined control sequence' "$PAPER_DIR/main.log" 2>/dev/null || true); undef_cs=${undef_cs:-0}
     [ "$undef_cs" -gt 0 ] && echo "  WARN: $undef_cs undefined control sequences"
 
     # Missing package
@@ -56,7 +56,7 @@ if [ -f "$PAPER_DIR/main.log" ]; then
     [ -n "$missing_pkg" ] && echo "  CRITICAL: missing packages:" && echo "$missing_pkg" | sed 's/^/    /' && LATEX_ERRORS=$((LATEX_ERRORS + 1))
 
     # Font not found
-    font_err=$(grep -c 'Font.*not found\|cannot find font' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+    font_err=$(grep -c 'Font.*not found\|cannot find font' "$PAPER_DIR/main.log" 2>/dev/null || true); font_err=${font_err:-0}
     [ "$font_err" -gt 0 ] && echo "  WARN: $font_err font errors (check fc-list)"
 
     # Extract specific error locations for Claude to fix
@@ -74,11 +74,11 @@ if [ -f "$PAPER_DIR/main.log" ]; then
 fi
 
 # 3. Overfull hbox
-overfull=$(grep -c 'Overfull.*hbox' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+overfull=$(grep -c 'Overfull.*hbox' "$PAPER_DIR/main.log" 2>/dev/null || true); overfull=${overfull:-0}
 echo "  Overfull hbox: $overfull"
 
 # 3.5 Overfull vbox (table/figure overflow — content cut off at page bottom)
-overfull_v=$(grep -c 'Overfull.*vbox' "$PAPER_DIR/main.log" 2>/dev/null || echo 0)
+overfull_v=$(grep -c 'Overfull.*vbox' "$PAPER_DIR/main.log" 2>/dev/null || true); overfull_v=${overfull_v:-0}
 if [ "$overfull_v" -gt 0 ]; then
     echo "  FAIL: $overfull_v overfull vbox — tables/figures cut off at page bottom"
     echo "  Fix: use longtable for tall tables, or split into smaller tables"
@@ -237,16 +237,16 @@ if [ -f "$PAPER_DIR/main.tex" ]; then
     #     \bibitem 即可，绝不能要求 references.bib 或 main.bbl（那会恒 FAIL → 计入门禁则死循环）。
     #   · 外部 \bibliography{...} + bibtex 流程：才要求 references.bib 存在 + main.bbl 非空。
     if grep -q '\\begin{thebibliography}' "$PAPER_DIR/main.tex" 2>/dev/null; then
-        inline_items=$(grep -c '\\bibitem' "$PAPER_DIR/main.tex" 2>/dev/null || echo 0)
+        inline_items=$(grep -c '\\bibitem' "$PAPER_DIR/main.tex" 2>/dev/null || true); inline_items=${inline_items:-0}
         [ "$inline_items" -gt 0 ] && echo "  OK: inline thebibliography ($inline_items entries)" || { echo "  FAIL: inline thebibliography 为空（无 \\bibitem）"; EXIT_CODE=1; }
     else
         if [ -f "$PAPER_DIR/references.bib" ]; then
-            bib_entries=$(grep -c '^@' "$PAPER_DIR/references.bib" 2>/dev/null || echo 0)
+            bib_entries=$(grep -c '^@' "$PAPER_DIR/references.bib" 2>/dev/null || true); bib_entries=${bib_entries:-0}
             echo "  OK: references.bib ($bib_entries entries)"
         else
             echo "  FAIL: references.bib not found" && EXIT_CODE=1
         fi
-        bbl_entries=$(grep -c '\\bibitem' "$PAPER_DIR/main.bbl" 2>/dev/null || echo 0)
+        bbl_entries=$(grep -c '\\bibitem' "$PAPER_DIR/main.bbl" 2>/dev/null || true); bbl_entries=${bbl_entries:-0}
         echo "  Bibliography entries in PDF: $bbl_entries"
         [ "$bbl_entries" -eq 0 ] && echo "  FAIL: bibliography is empty in compiled PDF" && EXIT_CODE=1
     fi
@@ -432,7 +432,7 @@ for f in "$PAPER_DIR"/sections/*.tex; do
     [ -f "$f" ] || continue
     bn=$(basename "$f")
     # Check for subfigure usage (forbidden in competition papers)
-    sf_count=$(grep -c '\\begin{subfigure}' "$f" 2>/dev/null || echo 0)
+    sf_count=$(grep -c '\\begin{subfigure}' "$f" 2>/dev/null || true); sf_count=${sf_count:-0}
     if [ "$sf_count" -gt 0 ]; then
         echo "  FAIL: $bn uses subfigure ($sf_count times) — competition papers must use independent figure environments, not subfigure"
         subfig_abuse=$((subfig_abuse + sf_count))

@@ -14,7 +14,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.4.5';
+const BUILD = '0.4.6';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -54,6 +54,33 @@ async function sessionCwd(ctx, exec) {
 
 function resolvePath(cwd, p) {
   return path.isAbsolute(p) ? p : path.resolve(cwd, p);
+}
+
+// 完整路径段判断包含关系：`..raw` 是合法子目录，只有首段恰为 `..` 才是外部路径
+function isInside(ancestor, child) {
+  const rel = path.relative(ancestor, child);
+  if (!rel) return true;
+  if (path.isAbsolute(rel)) return false;
+  return rel.split(path.sep)[0] !== '..';
+}
+
+// 目标可能不存在：找最近的已存在祖先做 realpath，再拼回剩余路径段。
+// 这样既能穿透 junction/符号链接，也能对“新建目录”做真实位置校验。
+async function resolveEffectivePath(target) {
+  let probe = path.resolve(target);
+  const tail = [];
+  while (!existsSync(probe)) {
+    const parent = path.dirname(probe);
+    if (parent === probe) break;
+    tail.unshift(path.basename(probe));
+    probe = parent;
+  }
+  const real = await realpath(probe).catch(() => probe);
+  return path.join(real, ...tail);
+}
+
+function samePath(a, b) {
+  return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 }
 
 async function requireState(workspace) {
@@ -139,11 +166,21 @@ export function apply(ctx, config = {}) {
       const workspaceName = String(args.workspace_name ?? defaultName);
       const workspace = path.resolve(base, workspaceName);
       const relToBase = path.relative(base, workspace);
-      if (!relToBase || relToBase.startsWith('..') || path.isAbsolute(relToBase)) {
+      if (!relToBase || relToBase.split(path.sep)[0] === '..' || path.isAbsolute(relToBase)) {
         throw new Error(`workspace_name 必须是会话目录下的子目录名（不能是绝对路径或含 .. 逃逸）：${workspaceName}`);
+      }
+      const baseReal = await realpath(base).catch(() => base);
+      const workspaceReal = await resolveEffectivePath(workspace);
+      if (!isInside(baseReal, workspaceReal)) {
+        throw new Error(`workspace_name 解析后落在会话目录之外（疑似符号链接/junction 逃逸）：${workspace} → ${workspaceReal}`);
       }
       if (existsSync(workspace)) {
         if (!args.overwrite) throw new Error(`工作区已存在：${workspace}（要重建请传 overwrite=true）`);
+        // 拒绝删除符号链接/junction（可能指向会话外目录；rm 递归会误删真实目标）
+        const linkReal = await realpath(workspace).catch(() => workspace);
+        if (!samePath(linkReal, workspace)) {
+          throw new Error(`拒绝删除：工作区是符号链接/目录联接，可能指向会话外目录：${workspace} → ${linkReal}`);
+        }
         // 安全删除：只删本插件创建的工作区（有 .mmw/state.json 且 workspace 名匹配），
         // 且工作区不能与赛题目录互相包含（否则会删掉赛题/输入数据）
         const statePath = path.join(workspace, '.mmw', 'state.json');
@@ -157,19 +194,11 @@ export function apply(ctx, config = {}) {
         if (!ownWorkspace) {
           throw new Error(`拒绝删除：${workspace} 不是本插件创建的工作区（缺少有效 .mmw/state.json）`);
         }
-        const [inputReal, workspaceReal, baseReal] = await Promise.all([
-          realpath(inputDir).catch(() => inputDir),
-          realpath(workspace).catch(() => workspace),
-          realpath(base).catch(() => base),
-        ]);
-        const inside = (ancestor, child) => {
-          const rel = path.relative(ancestor, child);
-          return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-        };
-        if (inside(inputReal, workspaceReal) || inside(workspaceReal, inputReal)) {
+        const inputReal = await realpath(inputDir).catch(() => inputDir);
+        if (isInside(inputReal, workspaceReal) || isInside(workspaceReal, inputReal)) {
           throw new Error(`拒绝删除：工作区与赛题目录重叠，input_dir 不能被删除或覆盖（${inputDir} ↔ ${workspace}）`);
         }
-        if (workspaceReal === baseReal) throw new Error('拒绝删除会话目录本身');
+        if (samePath(workspaceReal, baseReal)) throw new Error('拒绝删除会话目录本身');
         await rm(workspace, { recursive: true, force: true });
       }
 
@@ -614,9 +643,11 @@ export function apply(ctx, config = {}) {
       }
       // 以用户显式传入的开关为基底重新推导：换赛项时 language/max_pages 等默认值应跟着新赛项变，
       // 不能把旧赛项推导出的 zh/30 当成用户显式设置带过去。
-      const explicit = { ...(state.explicitSwitches ?? {}), ...(args.switches ?? {}) };
-      const baseSwitches = state.explicitSwitches ? explicit : { ...state.switches, ...(args.switches ?? {}) };
-      const { switches, errors } = normalizeSwitches(baseSwitches);
+      // 旧工作区（没有 explicitSwitches 字段）首次迁移：把完整旧配置当基线保存，
+      // 否则第一次改动只记下本次 args，第二次调用会丢掉其余配置。
+      const explicitBase = state.explicitSwitches ?? state.switches;
+      const explicit = { ...explicitBase, ...(args.switches ?? {}) };
+      const { switches, errors } = normalizeSwitches(explicit);
       if (errors.length) throw new Error(errors.join('；'));
 
       const steps = resolveSteps(switches);

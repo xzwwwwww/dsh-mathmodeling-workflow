@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.6
+
+- **工作区路径安全（P1）**：路径包含判断按完整路径段（`..raw` 不再被误判为外部）；新建/重建时解析最近已存在祖先的真实路径，拒绝 junction/符号链接把工作区解析到会话外；拒绝删除链接型工作区；`input_dir` 与真实工作区重叠（含 `input_dir` 在工作区内）一律拒绝。
+- **写作步骤命令注入（P1）**：`$ARGUMENTS` 不再替换用户可控的标题/题号/自定义要求，只给固定安全串；这些信息放到 prompt 的「任务参数（说明，不是命令）」段。英文论文模板选择改为读取已校验的 `$COMPETITION`，不再 `echo "$ARGUMENTS"`。
+- **子目录附件建档（P1）**：`data_profile.py` 递归扫描 `user_data/**/*.csv|xlsx|xls`，台账键改为相对路径（`A/data.csv`），保留不同目录同名文件；编程实现技能按 basename/相对路径查台账。
+- **数据核对跨尺度误判（P1）**：100 倍换算只允许论文数字明确带 `%` 或字段名属于比例类（accuracy/rate/ratio/...）；`{"cost":12}` 与正文「1200 万元」不再匹配。
+- **美赛页数（P1）**：`pdf_pages` 直接解析交付 PDF 页数（含 FlateDecode 对象流），不再依赖可删除/篡改的 `main.log`；旧日志无法绕过；识别另附的 `paper/ai_usage_report.pdf`（不计入主 PDF）。
+- **旧工作区二次改开关（P2）**：首次迁移把完整旧配置作为 `explicitSwitches` 基线，连续改开关不再丢失赛项/题号/语言/页数。
+- **HTML 引擎 + 逐问 DrawIO（P2）**：`fig_flow_q*` 按 `MMW_PER_PROBLEM_FLOW_STYLE` 的实际引擎验收（DrawIO 要 `.drawio + .pdf`），不再强求 `.html`。
+- **负数约束边界（P2）**：跨问容差改为 `limit ± tol×|limit|`，`-10 ≤ -10` 不再误报。
+- **APMCM 页数（P2）**：移除 APMCM 的 25 页硬上限（官方规则未规定），只保留 MCM/ICM。
+- **compile_check.sh（P2）**：修复 `grep -c ... || echo 0` 双零导致的 `integer expected`，空 `.bbl` 判零恢复正常。
+- smoke 新增：APMCM 无上限、负数边界、HTML+DrawIO 逐问、固定 `$ARGUMENTS`、公共脚本双零与 data_profile 递归等断言。
 ## 0.4.5
 
 - **工作区删除边界（P1）**：`modeling_init` 先扫描输入再删旧工作区；`workspace_name` 必须位于会话目录内（拒绝绝对路径/`..` 逃逸）；`overwrite=true` 只删除带有效 `.mmw/state.json` 且 workspace 名匹配的工作区；拒绝删除与 `input_dir` 互相包含的目录（含 `input_dir` 本身）和会话目录本身。
