@@ -70,17 +70,9 @@ export PYTHONUTF8="1"
 
 echo "=== 编译前清理 ($PAPER_DIR, using $PYTHON, locale $_UTF8_LOCALE) ==="
 
-# 0. 杀掉残留的 XeLaTeX/pdflatex 进程（Windows 文件锁问题）
-# 上一次编译可能没完全退出，导致字体文件被锁住 Permission denied
-echo "--- 清理残留编译进程 ---"
-if command -v taskkill &>/dev/null; then
-    taskkill //F //IM xelatex.exe 2>/dev/null && echo "  killed xelatex.exe" || true
-    taskkill //F //IM pdflatex.exe 2>/dev/null && echo "  killed pdflatex.exe" || true
-elif command -v pkill &>/dev/null; then
-    pkill -f xelatex 2>/dev/null || true
-    pkill -f pdflatex 2>/dev/null || true
-fi
-sleep 1
+# 0. 不按进程名清理：同机可能有其他项目正在编译。
+# 本脚本没有启动/记录 TeX 子进程，因此没有可归属本次任务的 PID 可清理。
+echo "--- 保留现有编译进程（仅处理本工作区文件）---"
 
 # 1. 清理特殊 Unicode 字符（防止乱码）
 echo "--- 清理特殊字符 ---"

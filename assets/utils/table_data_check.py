@@ -58,7 +58,7 @@ def _numbers_from_line(line: str) -> list[tuple[str, float, bool]]:
         # backslash, so inspect the suffix as well.
         suffix = line[match.end() :]
         is_percent = token.endswith("%") or suffix.startswith("%") or suffix.startswith(r"\%")
-        raw_number = token[:-1] if is_percent else token
+        raw_number = token[:-1] if token.endswith("%") else token
         try:
             values.append((token, float(raw_number), is_percent))
         except ValueError:
@@ -76,11 +76,12 @@ def _precision_tolerance(token: str) -> float:
 
 def _matches_json(value: float, token: str, is_percent: bool, json_numbers: list[float]) -> bool:
     tolerance = _precision_tolerance(token)
-    candidates = [value]
+    candidates = [(value, tolerance)]
     if is_percent:
-        candidates.extend((value / 100.0, value * 100.0))
-    for candidate in candidates:
-        if any(abs(candidate - source) <= tolerance for source in json_numbers):
+        # Rounding tolerance must use the same scale as the candidate value.
+        candidates.extend(((value / 100.0, tolerance / 100.0), (value * 100.0, tolerance * 100.0)))
+    for candidate, candidate_tolerance in candidates:
+        if any(abs(candidate - source) <= candidate_tolerance for source in json_numbers):
             return True
     return False
 
@@ -107,7 +108,8 @@ def check_tables(figures_dir: Path) -> dict[str, Any]:
 
     unmatched: list[dict[str, str]] = []
     checked = 0
-    table_paths = sorted([*figures_dir.glob("TABLE_*.tex"), *figures_dir.glob("TABLE_*.md")])
+    table_paths = sorted(path for path in [*figures_dir.glob("TABLE_*.tex"), *figures_dir.glob("TABLE_*.md")]
+                         if not path.name.startswith("TABLE_DATA_CHECK_"))
     for table_path in table_paths:
         for line_number, line in enumerate(_data_lines(table_path), start=1):
             for token, value, is_percent in _numbers_from_line(line):
@@ -133,10 +135,18 @@ def main() -> int:
     parser.add_argument("--figures", default="figures")
     args = parser.parse_args()
     figures_dir = Path(args.figures)
-    report = check_tables(figures_dir)
-    report_path = figures_dir / "TABLE_DATA_CHECK_LOCAL_REPORT.json"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    figures_dir.mkdir(parents=True, exist_ok=True)
     marker_path = figures_dir / "TABLE_DATA_CHECK_PASSED.txt"
+    marker_path.unlink(missing_ok=True)
+    report_path = figures_dir / "TABLE_DATA_CHECK_LOCAL_REPORT.json"
+    report_path.write_text(json.dumps({"ok": False, "status": "unavailable"}), encoding="utf-8")
+    try:
+        report = check_tables(figures_dir)
+    except (OSError, ValueError, RecursionError) as exc:
+        report_path.write_text(json.dumps({"ok": False, "status": "unavailable", "reason": str(exc)}), encoding="utf-8")
+        print(f"TABLE_DATA_CHECK_FAILED {exc}")
+        return 1
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     if report["ok"]:
         marker_path.touch()
         print(

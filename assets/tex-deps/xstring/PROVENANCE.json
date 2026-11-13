@@ -1,0 +1,29 @@
+{
+  "name": "xstring",
+  "version": "1.86",
+  "release_date": "2023-08-22",
+  "author": "Christian Tellechea",
+  "license": "LPPL-1.3c-or-later",
+  "upstream": "https://ctan.org/pkg/xstring",
+  "archive_url": "https://mirrors.tuna.tsinghua.edu.cn/CTAN/macros/generic/xstring.zip",
+  "archive_sha256": "0d432b250e3128b0e0f70028df7ca94966f152500f9e5e208172ae5586147b2c",
+  "runtime_files": [
+    "xstring.sty",
+    "xstring.tex"
+  ],
+  "modifications": "None; original upstream archive contents.",
+  "files": {
+    "lppl-1.3c.txt": "c1ae6e179a6d28bbd5c483fbacc744acc75e922d598281dc3390aab26126e163",
+    "README": "826d0ad710764786dce0ec0b1ed6756c2167086e6738b7adba84aef4c43aa379",
+    "test_etex.pdf": "5cd1175172d237de3409cfa4d10862ea64ee2858c84d69d9cb6751d92a1e91f8",
+    "test_etex.tex": "62372c80c421997d4ed8de8c7939fe44ffa7885c8fdf6b51e3fa78a812e8c6f9",
+    "test_latex.pdf": "3c20908951cb6eb4002b6f76ec856f36b6dd663280a92da6bc389fbcd3d3ab8f",
+    "test_latex.tex": "404ad0cd17203ee98fbd56737097c44655f022c142d5a342b660f002b715f617",
+    "xstring-en.pdf": "cb39b5d551c0178992db0269fc6e135ea737ac50e14e12f7bcf4a979c66f786e",
+    "xstring-en.tex": "52024d1476046d3d291009acb604d9beb12ce3bdb37d86127cfc430ee1a4a59a",
+    "xstring-fr.pdf": "2b47e08057d8e22cbd2affe157661c181821a991580ee01e1ae912c196316f4f",
+    "xstring-fr.tex": "11b132ff4dd687b2f07537b9a1a43df71ee4091ac13c0984fe5b929df80ac60c",
+    "xstring.sty": "6b2fdbe2c3a1f873a6c19fc8da67001e269580be2827040b152cc59216b022c4",
+    "xstring.tex": "5cfb52e795a80a1e8f06280a8f968046a6fa05d5dae2313933d36b8e6eaf8c35"
+  }
+}

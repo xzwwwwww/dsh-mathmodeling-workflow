@@ -937,14 +937,14 @@ Follow the interleaving, embedding, and LaTeX rules from `_utils/writing_rules.m
 - **浮动符（受控浮动）**：图用 `\begin{figure}[H]`（就地钉死），表用 `\begin{table}[H]`（就地）。图用 `[H]` 是为了钉在引出文字正下方、从机制上杜绝多图连排（`[htbp]` 会让 LaTeX 把多张图攒到一页、最伤可读性）；代价是极少数"图接近整页高+恰好落页底"时上方留一段空白，但图已限高在 `0.9\textheight` 内、且每张图前后都有引导/承接文字，此情形罕见且优于连排。模板已加载 `\usepackage[section]{placeins}`，每节末自动 `\FloatBarrier`（防残余浮动体跨节）。⛔ 表格不要用 `[htbp]`：会被 `\FloatBarrier` 逼到节末，在表上方留半页空白（符号表最常中招）；短表用 `[H]` 就地，超长表用 `\begin{longtable}`。伪代码 `\begin{algorithm}[H]` 保持就地。
 - 每张图/表后面必须有 ≥5 行分析文字（数值解读+对比+结论），然后才能放下一张图
 - 绝对禁止两张图连续出现中间没有分析段落
-- 图片用 `\includegraphics[width=0.85\textwidth,keepaspectratio]`（以宽度为主，高度自适应）。⛔ 不要再加 `height=0.38\textheight` 这种小高度限制——在 `keepaspectratio` 下 height 只会把图**压得更小**：方形或竖高的图（热力图、雷达图、森林图、混淆矩阵、竖排子图）会被 0.38 页高卡到只有半页宽，导致"图很小看不清"。只有当某张图确实接近整页高、可能溢出时，才加 `height=0.9\textheight` 作为防溢出兜底。**⛔ 此条只针对你新写的数据图；`latex_includes.tex` 里已给尺寸的图（流程图/路线图/TikZ 等）照抄其 `width`/`height`，别套这里的 `0.85`（见下方"图片宽度下限"的例外）。**
-- **⛔ 禁止使用 LaTeX `subfigure`/`subcaption` 并排「多张独立 PDF」。** 每张图必须独占一个 `\begin{figure}[H]...\end{figure}` 环境，宽度 ≥ `0.85\textwidth`。不要用 `\begin{subfigure}{0.48\textwidth}` 把两张独立 PDF 缩成半页宽——这会导致图片太小看不清。如果确实需要对比两张图，分成两个独立的 figure 环境，中间加 2-3 句过渡分析文字。
-  **✅ 例外（推荐做法）：多面板组合图（FIGURE_MANIFEST 标了 `[2-panel]` / `[4-panel]`）应当在 matplotlib 内一次性画出 —— 用 `plt.subplots(1, 2)` 或 `plt.subplots(2, 2)` + 每子图 `(a)(b)(c)(d)` 标签 —— 输出为「单个 PDF」，LaTeX 引用时仍是 `\includegraphics[width=0.85\textwidth]{fig_xxx.pdf}` 一行搞定。这种方式既能并排对比又能保持高分辨率，不属于禁令范围。详见 `_utils/writing_rules.md` 第 4 条。
+- 所有图片（包括数据图）照抄 `figures/latex_includes.tex` 的尺寸。新图先登记进该文件，再运行 `_utils/fig_include_size.py`：按高/宽 ≤0.8 / ≤1.2 / ≤1.6 / >1.6，分别取宽度 0.85 / 0.70 / 0.50 / 0.42 textwidth，统一限高 0.80 textheight 并保留 keepaspectratio。竖图合法收窄，不得统一强制 0.85 或为凑页数压图。
+- **⛔ 禁止使用 LaTeX `subfigure`/`subcaption` 并排「多张独立 PDF」。** 每张独立图使用一个 `\begin{figure}[H]...\end{figure}` 环境，尺寸照抄权威 includes。不要用 `\begin{subfigure}{0.48\textwidth}` 把两张独立 PDF 缩成半页宽——这会导致图片太小看不清。如果确实需要对比两张图，分成两个独立的 figure 环境，中间加 2-3 句过渡分析文字。
+  **✅ 例外（推荐做法）：多面板组合图（FIGURE_MANIFEST 标了 `[2-panel]` / `[4-panel]`）应当在 matplotlib 内一次性画出 —— 用 `plt.subplots(1, 2)` 或 `plt.subplots(2, 2)` + 每子图 `(a)(b)(c)(d)` 标签 —— 输出为「单个 PDF」，LaTeX 引用时仍用一条 `\includegraphics`，尺寸照抄该组合图的权威 includes。这种方式既能并排对比又能保持高分辨率，不属于禁令范围。详见 `_utils/writing_rules.md` 第 4 条。
   **🟡 数据图不是都要并排——默认单列，留白才触发**：数据结果图**默认一张一行**；只有当两张图**同类/可比**（如两变量分布、两场景同类曲线）、且**各自单列都只占半页、配文字后留半页以上白**时，才做成 2-panel 并排把版面填满。两张图不相关的，哪怕都很空也各自单列，不为凑页硬拼（详见 `_utils/writing_rules.md` 第 4 条决策流程 3.5 步）。
   **⛔ 但逻辑框图例外中的例外——流程图/架构图/技术路线图/TikZ 几何·算法·架构示意图（drawio 或 tikz 生成的逻辑框图）绝对单列独占，不论主题多相关都不并排**：它们靠节点文字和连线表意，缩成半栏字就糊了，并排没有信息收益。上面的✅ matplotlib 合成单 PDF 只针对**数据结果图**（柱状/折线/热力/混淆矩阵等）的并排对比，逻辑框图（含 tikz_*.pdf）不走这条、永远一张一行。
-- **⛔ 图片宽度下限（仅限你自己新写的数据图）：** 对**你在本步新写 `\includegraphics` 的数据结果图**（柱状/折线/热力/散点等），`width` 不得小于 `0.8\textwidth`，`width=0.5/0.48/0.45` 都太小、应改 `0.85` 或 `0.9`——防数据图被缩得看不清。
+- **图尺寸统一契约：** 新写的数据图也先登记到 `latex_includes.tex` 并按真实长宽比定尺寸。没有测量依据时不要自行指定小宽度；已登记图不受统一最小宽度限制，合法竖图可为 0.42/0.50 textwidth。
   - **⛔⛔ 例外（最高优先级，压倒上面的下限）：凡图已在 `latex_includes.tex` 里给出 `\includegraphics`（尤其流程图 `fig_flow_*`、技术路线图 `fig_roadmap*`、架构图、TikZ 图），一律照抄它的 `width`/`height`，即使小于 `0.8` 也绝不改大。** 那些值是 `fig_include_size.py` 按每张图**真实长宽比**算好的——竖长条流程图本就该 `0.42~0.5\textwidth`，你若"嫌小"改成 `0.85`，`keepaspectratio` 下高度会顶到 `height` 上限、把图**撑满整页**（这正是"流程图占太大"的根因）。
-  - **判定顺序**：① 这张图在 `latex_includes.tex` 里有吗？→ 有：照抄尺寸，本条下限**不适用**；② 没有、是你新写的数据图 → 才套 `≥0.8` 下限。与前文「严禁改 `\includegraphics` 的 width/height」是同一条铁律，冲突时**一律以"照抄 `latex_includes`"为准**。
+  - **判定顺序**：① 已在 `latex_includes.tex` → 照抄尺寸；② 未登记 → 先登记并按真实长宽比生成尺寸，再嵌入。与前文「严禁改 `\includegraphics` 的 width/height」一致，一律以权威 includes 为准。
 
 > ⛔ 长表格处理规则见上方「长表格处理规则（>12 行的数据表格）」一处（含缩略版示例 + 汇总统计行 + 附录 longtable + compile_utils.sh 兜底）。此处原来重复写了一遍「>15 行」版本，阈值与上面的 12 行矛盾（同一张表可能一处判超、一处判过，逼 AI 反复改），已删除，统一以上面的 **12 行** 阈值为准。
 
@@ -1164,7 +1164,18 @@ echo "AI_DISC=$AI_DISC"
 ### Step 6: Final verification
 
 ```bash
-bash _utils/writing_check.sh paper/ 2>/dev/null || bash skills/shared-scripts/writing_check.sh paper/
+WC_SCRIPT=""
+for candidate in _utils/writing_check.sh skills/shared-scripts/writing_check.sh; do
+    if [ -f "$candidate" ]; then WC_SCRIPT="$candidate"; break; fi
+done
+if [ -n "$WC_SCRIPT" ]; then
+    bash "$WC_SCRIPT" paper/
+    WC_EXIT=$?
+else
+    echo "FAIL: writing_check.sh not found"
+    WC_EXIT=127
+fi
+# WC_EXIT 非零阻止定稿；只有缺脚本时才能选择 fallback。
 ```
 
 **⛔ 能力声称终检（正文写完后跑，扫"有没有把没通过的能力写成成果"）：**

@@ -1,0 +1,992 @@
+%##################### WARNING #####################
+% This is NOT a LaTeX file, it is a TeX file.
+% It must be compiled with eTeX typing <etex test_etex>
+%#################### ATTENTION ####################
+% Ceci n'est PAS un fichier LaTeX, c'est un fichier TeX.
+% Il doit être compilé avec eteX en tapant <etex test_etex>
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input xstring
+\def\delimiteur{-{}}
+\font\hugerm=ecbx2000
+\font\hugett=ectt1750
+\font\largeboldrm=ecbx1300
+\font\largett=ectt1300
+\font\textfont=ecrm1000
+\textfont
+\catcode`\@=11\relax
+\gdef\exemple{\csname xs_ifstar\endcsname{\def\frontiere{\delimiteur}\csname xs_toks_toverb\endcsname}{\def\frontiere{}\csname xs_toks_toverb\endcsname}}
+\expandafter\def\csname xs_assign_verb\endcsname#1{%
+	\noexpandarg
+	\tokenize\cs@resultat{#1}%
+	\fullexpandarg
+	\leavevmode\hbox to0.7\hsize{\hfil\tt#1}\quad\frontiere\cs@resultat\frontiere\hfil\par}%
+\catcode`\@=12\relax
+\def\chapitre#1#2{\vskip 6pt plus 2pt minus 2pt{{\largeboldrm#1} {\largett#2}}\vskip 3pt plus 1pt minus 1pt}
+\def\AvecArgOptionnel{\vskip 6pt plus 2pt minus 2pt Mêmes exemples avec l'argument optionnel :\par}
+\hoffset-1.54cm\hsize19cm\parindent0pt
+% debut du texte
+\hfil{\hugerm Ceci est le fichier de test de xstring}\hfil{}
+
+\hrule\vskip0.5ex
+
+\hrule\vskip2ex
+
+Attention : ce fichier {\tt test\_etex.tex} produit une sortie quasiment identique au fichier {\tt test\_latex.tex}, mais il doit se lancer avec Plain $\varepsilon$-\TeX. Pour des raison d'encodage, contrairement au fichier {\tt test\_latex.tex}, les arguments des macros présentées ici ne contiennent pas de lettres accentuées.\vskip2em
+
+Toutes les situations ne sont pas envisagées, mais au moins un grand nombre ! Les macros sont examinées dans l'ordre logique du code.
+
+Lorsque le résultat contient des espaces ou peut conduire à des doutes, il sera entouré de ''\delimiteur``, étant entendu que ''\delimiteur\delimiteur`` est une chaine vide.\vskip2em
+
+\hfill{\hugerm Le mode \hugett\string\fullexpandarg}\hfill{}
+
+\vskip-1ex\hfil\hbox to8cm{\hrulefill}\hfil{}\vskip3.5ex
+
+\chapitre{Le test}{IfSubStr}
+
+\exemple|\IfSubStr{abcdef}{cd}{vrai}{faux}|
+\exemple|\IfSubStr{a b c d }{b c}{vrai}{faux}|
+\exemple|\IfSubStr{a b c d }{bc}{vrai}{faux}|
+\exemple|\IfSubStr{abcdef}{}{vrai}{faux}|
+\exemple|\IfSubStr{a}{a}{vrai}{faux}|
+\exemple|\IfSubStr{aaaa}{aa}{vrai}{faux}|
+\exemple|\IfSubStr{a}{aa}{vrai}{faux}|
+\exemple|\IfSubStr{a}{}{vrai}{faux}|
+\exemple|\IfSubStr{}{a}{vrai}{faux}|
+\exemple|\IfSubStr{}{}{vrai}{faux}|
+\exemple|\IfSubStr[2]{abaca}{a}{vrai}{faux}|
+\exemple|\IfSubStr[3]{abaca}{a}{vrai}{faux}|
+\exemple|\IfSubStr[4]{abaca}{a}{vrai}{faux}|
+\exemple|\IfSubStr[-2]{abaca}{a}{vrai}{faux}|
+
+\chapitre{Le test}{IfBeginWith}
+
+\exemple|\IfBeginWith{abcdef}{adc}{vrai}{faux}|
+\exemple|\IfBeginWith{abcdef}{abcd}{vrai}{faux}|
+\exemple|\IfBeginWith{ a b c }{ a}{vrai}{faux}|
+\exemple|\IfBeginWith{a b c d}{ab}{vrai}{faux}|
+\exemple|\IfBeginWith{a}{a}{vrai}{faux}|
+\exemple|\IfBeginWith{a}{aa}{vrai}{faux}|
+\exemple|\IfBeginWith{a}{}{vrai}{faux}|
+\exemple|\IfBeginWith{}{a}{vrai}{faux}|
+\exemple|\IfBeginWith{}{}{vrai}{faux}|
+
+\chapitre{Le test}{IfEndWith}
+
+\exemple|\IfEndWith{abcdef}{ab}{vrai}{faux}|
+\exemple|\IfEndWith{abcdef}{f}{vrai}{faux}|
+\exemple|\IfEndWith{ a b c }{c}{vrai}{faux}|
+\exemple|\IfEndWith{ a b c }{ }{vrai}{faux}|
+\exemple|\IfEndWith{a}{a}{vrai}{faux}|
+\exemple|\IfEndWith{a}{aa}{vrai}{faux}|
+\exemple|\IfEndWith{a}{}{vrai}{faux}|
+\exemple|\IfEndWith{}{a}{vrai}{faux}|
+\exemple|\IfEndWith{}{}{vrai}{faux}|
+
+\chapitre{Le test}{IfSubStrBefore}
+
+\exemple|\IfSubStrBefore{abcdef}{b}{e}{vrai}{faux}|
+\exemple|\IfSubStrBefore{abcdef}{e}{c}{vrai}{faux}|
+\exemple|\IfSubStrBefore{ a b c }{ }{b}{vrai}{faux}|
+\exemple|\IfSubStrBefore{ a b c }{ b}{c }{vrai}{faux}|
+\exemple|\IfSubStrBefore{abcdef}{z}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore{abcdef}{y}{z}{vrai}{faux}|
+\exemple|\IfSubStrBefore{abcdef}{a}{z}{vrai}{faux}|
+\exemple|\IfSubStrBefore{aaa}{a}{aa}{vrai}{faux}|
+\exemple|\IfSubStrBefore{abcdef}{a}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore{a}{a}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore{}{a}{b}{vrai}{faux}|
+\exemple|\IfSubStrBefore{a}{}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore{}{a}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore{}{}{}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,1]{abacada}{d}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,2]{abacada}{d}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,3]{abacada}{d}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,4]{abacada}{d}{a}{vrai}{faux}|
+\exemple|\IfSubStrBefore[2,1]{maman papa}{a}{p}{vrai}{faux}|
+\exemple|\IfSubStrBefore[2,2]{maman papa}{a}{p}{vrai}{faux}|
+\exemple|\IfSubStrBefore[4,2]{maman papa}{a}{p}{vrai}{faux}|
+
+\chapitre{Le test}{IfStrBehind}
+
+\exemple|\IfSubStrBehind{abcdef}{b}{e}{vrai}{faux}|
+\exemple|\IfSubStrBehind{abcdef}{e}{c}{vrai}{faux}|
+\exemple|\IfSubStrBehind{ a b c }{ }{b}{vrai}{faux}|
+\exemple|\IfSubStrBehind{ a b c }{ c}{ a}{vrai}{faux}|
+\exemple|\IfSubStrBehind{abcdef}{z}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind{abcdef}{y}{z}{vrai}{faux}|
+\exemple|\IfSubStrBehind{abcdef}{a}{z}{vrai}{faux}|
+\exemple|\IfSubStrBehind{aaa}{a}{aa}{vrai}{faux}|
+\exemple|\IfSubStrBehind{abcdef}{a}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind{a}{a}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind{}{a}{b}{vrai}{faux}|
+\exemple|\IfSubStrBehind{a}{}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind{}{a}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind{}{}{}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,1]{abacada}{c}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,2]{abacada}{c}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,3]{abacada}{c}{a}{vrai}{faux}|
+\exemple|\IfSubStrBehind[2,1]{maman papa}{a}{p}{vrai}{faux}|
+\exemple|\IfSubStrBehind[3,1]{maman papa}{a}{p}{vrai}{faux}|
+\exemple|\IfSubStrBehind[3,2]{maman papa}{a}{p}{vrai}{faux}|
+\exemple|\IfSubStrBehind[4,2]{maman papa}{a}{p}{vrai}{faux}|
+
+\chapitre{Le test}{IfInteger}
+
+\exemple|\IfInteger{156}{vrai}{faux}|
+\exemple|\IfInteger{1.6}{vrai}{faux}|
+\exemple|\IfInteger{7a5}{vrai}{faux}|
+\exemple|\IfInteger{+9}{vrai}{faux}|
+\exemple|\IfInteger{-15}{vrai}{faux}|
+\exemple|\IfInteger{0}{vrai}{faux}|
+\exemple|\IfInteger{-1,2}{vrai}{faux}|
+\exemple|\IfInteger{1.}{vrai}{faux}|
+\exemple|\IfInteger{-00}{vrai}{faux}|
+\exemple|\IfInteger{+}{vrai}{faux}|
+\exemple|\IfInteger{-}{vrai}{faux}|
+\exemple|\IfInteger{.}{vrai}{faux}|
+\exemple|\IfInteger{}{vrai}{faux}|
+
+\chapitre{Le test}{IfDecimal}
+
+\exemple|\IfDecimal{6}{vrai}{faux}|
+\exemple|\IfDecimal{-78}{vrai}{faux}|
+\exemple|\IfDecimal{3.14}{vrai}{faux}|
+\exemple|\IfDecimal{3,14}{vrai}{faux}|
+\exemple|\IfDecimal{1..5}{vrai}{faux}|
+\exemple|\IfDecimal{-9.8}{vrai}{faux}|
+\exemple|\IfDecimal{+9.8}{vrai}{faux}|
+\exemple|\IfDecimal{-9,8}{vrai}{faux}|
+\exemple|\IfDecimal{+9,8}{vrai}{faux}|
+\exemple|\IfDecimal{+6.7.}{vrai}{faux}|
+\exemple|\IfDecimal{.5}{vrai}{faux}|
+\exemple|\IfDecimal{1.}{vrai}{faux}|
+\exemple|\IfDecimal{-.99}{vrai}{faux}|
+\exemple|\IfDecimal{-5.}{vrai}{faux}|
+\exemple|\IfDecimal{5a9.}{vrai}{faux}|
+\exemple|\IfDecimal{+}{vrai}{faux}|
+\exemple|\IfDecimal{-}{vrai}{faux}|
+\exemple|\IfDecimal{.}{vrai}{faux}|
+\exemple|\IfDecimal{}{vrai}{faux}|
+
+\chapitre{Le test}{IfStrEq}
+
+\exemple|\IfStrEq{abcdef}{abcdef}{vrai}{faux}|
+\exemple|\IfStrEq{a b c}{a b c}{vrai}{faux}|
+\exemple|\IfStrEq{abcd}{abc}{vrai}{faux}|
+\exemple|\IfStrEq{aab}{ab}{vrai}{faux}|
+\exemple|\IfStrEq{aab}{aa}{vrai}{faux}|
+\exemple|\IfStrEq{1.2}{1.20}{vrai}{faux}|
+\exemple|\IfStrEq{3,4}{3.4}{vrai}{faux}|
+\exemple|\IfStrEq{ }{  }{vrai}{faux}|
+\exemple|\IfStrEq{}{a}{vrai}{faux}|
+\exemple|\IfStrEq{a}{}{vrai}{faux}|
+\exemple|\IfStrEq{}{}{vrai}{faux}|
+
+\chapitre{Le test}{IfEq}
+
+\exemple|\IfEq{abcdef}{abcdef}{vrai}{faux}|
+\exemple|\IfEq{a b c}{a b c}{vrai}{faux}|
+\exemple|\IfEq{abcd}{abc}{vrai}{faux}|
+\exemple|\IfEq{aab}{ab}{vrai}{faux}|
+\exemple|\IfEq{aab}{aa}{vrai}{faux}|
+\exemple|\IfEq{1.2}{1.20}{vrai}{faux}|
+\exemple|\IfEq{+1.0000}{1}{vrai}{faux}|
+\exemple|\IfEq{-10}{10}{vrai}{faux}|
+\exemple|\IfEq{1,2}{1.2}{vrai}{faux}|
+\exemple|\IfEq{.5}{0.5}{vrai}{faux}|
+\exemple|\IfEq{,5}{0,5}{vrai}{faux}|
+\exemple|\IfEq{10}{dix}{vrai}{faux}|
+\exemple|\IfEq{123}{1a3}{vrai}{faux}|
+\exemple|\IfEq{0}{}{vrai}{faux}|
+\exemple|\IfEq{++10}{+10}{vrai}{faux}|
+\exemple|\IfEq{--10}{+10}{vrai}{faux}|
+\exemple|\IfEq{a}{}{vrai}{faux}|
+\exemple|\IfEq{}{a}{vrai}{faux}|
+\exemple|\IfEq{}{}{vrai}{faux}|
+
+\chapitre{La macro}{StrBefore}
+
+\exemple|\StrBefore{abcedef}{e}|
+\exemple*|\StrBefore{abcdef}{a}|
+\exemple*|\StrBefore{abcdef}{z}|
+\exemple*|\StrBefore{a b c d}{c}|
+\exemple*|\StrBefore{a b c d}{ }|
+\exemple*|\StrBefore[2]{a b c d}{ }|
+\exemple*|\StrBefore[3]{a b c d}{ }|
+\exemple*|\StrBefore[9]{a b c d}{ }|
+\exemple*|\StrBefore[-7]{a b c d}{ }|
+\exemple*|\StrBefore{abcdef}{Z}|
+\exemple*|\StrBefore[1]{aaaaaa}{aa}|
+\exemple|\StrBefore[2]{aaaaaa}{aa}|
+\exemple|\StrBefore[3]{aaaaaa}{aa}|
+\exemple*|\StrBefore[4]{aaaaaa}{aa}|
+\exemple*|\StrBefore{a}{}|
+\exemple*|\StrBefore{}{a}|
+\exemple*|\StrBefore{}{}|
+
+\AvecArgOptionnel
+\exemple|\StrBefore{abcedef}{e}[\aa]\aa|
+\exemple*|\StrBefore{abcdef}{a}[\aa]\aa|
+\exemple*|\StrBefore{abcdef}{z}[\aa]\aa|
+\exemple*|\StrBefore{a b c d}{c}[\aa]\aa|
+\exemple*|\StrBefore{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBefore[2]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBefore[3]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBefore[9]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBefore[-7]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBefore{abcdef}{Z}[\aa]\aa|
+\exemple*|\StrBefore[1]{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrBefore[2]{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrBefore[3]{aaaaaa}{aa}[\aa]\aa|
+\exemple*|\StrBefore[4]{aaaaaa}{aa}[\aa]\aa|
+\exemple*|\StrBefore{a}{}[\aa]\aa|
+\exemple*|\StrBefore{}{a}[\aa]\aa|
+\exemple*|\StrBefore{}{}[\aa]\aa|
+
+\chapitre{La macro}{StrBehind}
+
+\exemple|\StrBehind{abcedef}{e}|
+\exemple*|\StrBehind{abcdef}{a}|
+\exemple*|\StrBehind{abcdef}{z}|
+\exemple*|\StrBehind{a b c d}{c}|
+\exemple*|\StrBehind{a b c d}{ }|
+\exemple*|\StrBehind[2]{a b c d}{ }|
+\exemple*|\StrBehind[3]{a b c d}{ }|
+\exemple*|\StrBehind[9]{a b c d}{ }|
+\exemple*|\StrBehind[-7]{a b c d}{ }|
+\exemple*|\StrBehind{abcdef}{Z}|
+\exemple|\StrBehind[1]{aaaaaa}{aa}|
+\exemple|\StrBehind[2]{aaaaaa}{aa}|
+\exemple*|\StrBehind[3]{aaaaaa}{aa}|
+\exemple*|\StrBehind[4]{aaaaaa}{aa}|
+\exemple*|\StrBehind{a}{}|
+\exemple*|\StrBehind{}{a}|
+\exemple*|\StrBehind{}{}|
+
+\AvecArgOptionnel
+\exemple|\StrBehind{abcedef}{e}[\aa]\aa|
+\exemple*|\StrBehind{abcdef}{a}[\aa]\aa|
+\exemple*|\StrBehind{abcdef}{z}[\aa]\aa|
+\exemple*|\StrBehind{a b c d}{c}[\aa]\aa|
+\exemple*|\StrBehind{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBehind[2]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBehind[3]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBehind[9]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBehind[-7]{a b c d}{ }[\aa]\aa|
+\exemple*|\StrBehind{abcdef}{Z}[\aa]\aa|
+\exemple|\StrBehind[1]{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrBehind[2]{aaaaaa}{aa}[\aa]\aa|
+\exemple*|\StrBehind[3]{aaaaaa}{aa}[\aa]\aa|
+\exemple*|\StrBehind[4]{aaaaaa}{aa}[\aa]\aa|
+\exemple*|\StrBehind{a}{}[\aa]\aa|
+\exemple*|\StrBehind{}{a}[\aa]\aa|
+\exemple*|\StrBehind{}{}[\aa]\aa|
+
+\chapitre{La macro}{StrBetween}
+
+\exemple|\StrBetween{abcdef}{b}{e}|
+\exemple*|\StrBetween{aZaaaaZa}{Z}{Z}|
+\exemple*|\StrBetween[1,2]{aZaaaaZa}{Z}{Z}|
+\exemple*|\StrBetween{a b c d}{a}{c}|
+\exemple*|\StrBetween{a b c d}{a }{ d}|
+\exemple*|\StrBetween{abcdef}{a}{Z}|
+\exemple*|\StrBetween{abcdef}{Y}{Z}|
+\exemple*|\StrBetween[2,5]{aAaBaCaDa}{a}{a}|
+\exemple*|\StrBetween[4,1]{ab1ab2ab3ab4ab}{b}{a}|
+\exemple*|\StrBetween[3,4]{a b c d e f}{ }{ }|
+\exemple|\StrBetween[1,3]{aaaaaa}{aa}{aa}|
+\exemple*|\StrBetween{abcdef}{a}{}|
+\exemple*|\StrBetween{abcdef}{}{f}|
+\exemple*|\StrBetween{}{a}{b}|
+
+\AvecArgOptionnel
+\exemple|\StrBetween{abcdef}{b}{e}[\aa]\aa|
+\exemple*|\StrBetween{aZaaaaZa}{Z}{Z}[\aa]\aa|
+\exemple*|\StrBetween[1,2]{aZaaaaZa}{Z}{Z}[\aa]\aa|
+\exemple*|\StrBetween{a b c d}{a}{c}[\aa]\aa|
+\exemple*|\StrBetween{a b c d}{a }{ d}[\aa]\aa|
+\exemple*|\StrBetween{abcdef}{a}{Z}[\aa]\aa|
+\exemple*|\StrBetween{abcdef}{Y}{Z}[\aa]\aa|
+\exemple*|\StrBetween[2,5]{aAaBaCaDa}{a}{a}[\aa]\aa|
+\exemple*|\StrBetween[4,1]{ab1ab2ab3ab4ab}{b}{a}[\aa]\aa|
+\exemple*|\StrBetween[3,4]{a b c d e f}{ }{ }[\aa]\aa|
+\exemple|\StrBetween[1,3]{aaaaaa}{aa}{aa}[\aa]\aa|
+\exemple*|\StrBetween{abcdef}{a}{}[\aa]\aa|
+\exemple*|\StrBetween{abcdef}{}{f}[\aa]\aa|
+\exemple*|\StrBetween{}{a}{b}[\aa]\aa|
+
+\chapitre{La macro}{StrSubstitute}
+
+\exemple|\StrSubstitute{abcdef}{c}{ZZ}|
+\exemple|\StrSubstitute{aaaaaaa}{aa}{w}|
+\exemple|\StrSubstitute[0]{abacada}{a}{.}|
+\exemple|\StrSubstitute[1]{abacada}{a}{.}|
+\exemple|\StrSubstitute[2]{abacada}{a}{.}|
+\exemple|\StrSubstitute[3]{abacada}{a}{.}|
+\exemple|\StrSubstitute[4]{abacada}{a}{.}|
+\exemple|\StrSubstitute[5]{abacada}{a}{.}|
+\exemple|\StrSubstitute{a b c d e}{ }{,}|
+\exemple|\StrSubstitute{a b c d e}{ }{}|
+\exemple|\StrSubstitute{abcdef}{}{A}|
+\exemple|\StrSubstitute{abcdef}{}{}|
+\exemple*|\StrSubstitute{}{a}{b}|
+\exemple*|\StrSubstitute{}{}{}|
+
+\AvecArgOptionnel
+\exemple|\StrSubstitute{abcdef}{c}{ZZ}[\aa]\aa|
+\exemple|\StrSubstitute{aaaaaaa}{aa}{w}[\aa]\aa|
+\exemple|\StrSubstitute[0]{abacada}{a}{.}[\aa]\aa|
+\exemple|\StrSubstitute[1]{abacada}{a}{.}[\aa]\aa|
+\exemple|\StrSubstitute[2]{abacada}{a}{.}[\aa]\aa|
+\exemple|\StrSubstitute[3]{abacada}{a}{.}[\aa]\aa|
+\exemple|\StrSubstitute[4]{abacada}{a}{.}[\aa]\aa|
+\exemple|\StrSubstitute[5]{abacada}{a}{.}[\aa]\aa|
+\exemple|\StrSubstitute{a b c d e}{ }{,}[\aa]\aa|
+\exemple|\StrSubstitute{a b c d e}{ }{}[\aa]\aa|
+\exemple|\StrSubstitute{abcdef}{}{A}[\aa]\aa|
+\exemple|\StrSubstitute{abcdef}{}{}[\aa]\aa|
+\exemple*|\StrSubstitute{}{a}{b}[\aa]\aa|
+\exemple*|\StrSubstitute{}{}{}[\aa]\aa|
+
+\chapitre{La macro}{StrDel}
+
+\exemple|\StrDel{a1a2a3a4}{a}|
+\exemple|\StrDel[2]{a1a2a3a4}{a}|
+\exemple|\StrDel[-2]{a1a2a3a4}{a}|
+\exemple|\StrDel[10]{a1a2a3a4}{a}|
+\exemple|\StrDel[3]{a b c d e}{a}|
+
+\AvecArgOptionnel
+\exemple|\StrDel{a1a2a3a4}{a}[\aa]\aa|
+\exemple|\StrDel[2]{a1a2a3a4}{a}[\aa]\aa|
+\exemple|\StrDel[-2]{a1a2a3a4}{a}[\aa]\aa|
+\exemple|\StrDel[10]{a1a2a3a4}{a}[\aa]\aa|
+\exemple|\StrDel[3]{a b c d e}{a}[\aa]\aa|
+
+\chapitre{La macro}{StrLen}
+
+
+\exemple|\StrLen{abcdef}|
+\exemple|\StrLen{a b c}|
+\exemple|\StrLen{ a b c }|
+\exemple|\StrLen{a}|
+\exemple|\StrLen{}|
+
+\AvecArgOptionnel
+\exemple|\StrLen{abcdef}[\aa]\aa|
+\exemple|\StrLen{a b c}[\aa]\aa|
+\exemple|\StrLen{ a b c }[\aa]\aa|
+\exemple|\StrLen{a}[\aa]\aa|
+\exemple|\StrLen{}[\aa]\aa|
+
+\chapitre{la macro}{StrMid}
+
+\exemple|\StrMid{abcdef}{2}{5}|
+\exemple*|\StrMid{a b c d}{2}{6}|
+\exemple*|\StrMid{abcdef}{4}{2}|
+\exemple|\StrMid{abcdef}{-4}{3}|
+\exemple*|\StrMid{abcdef}{-4}{-1}|
+\exemple|\StrMid{abcdef}{-4}{20}|
+\exemple*|\StrMid{abcdef}{8}{10}|
+\exemple|\StrMid{abcdef}{2}{2}|
+\exemple|\StrMid{aaaaaa}{3}{6}|
+\exemple*|\StrMid{}{4}{5}|
+
+\AvecArgOptionnel
+\exemple|\StrMid{abcdef}{2}{5}[\aa]\aa|
+\exemple*|\StrMid{a b c d}{2}{6}[\aa]\aa|
+\exemple*|\StrMid{abcdef}{4}{2}[\aa]\aa|
+\exemple|\StrMid{abcdef}{-4}{3}[\aa]\aa|
+\exemple*|\StrMid{abcdef}{-4}{-1}[\aa]\aa|
+\exemple|\StrMid{abcdef}{-4}{20}[\aa]\aa|
+\exemple*|\StrMid{abcdef}{8}{10}[\aa]\aa|
+\exemple|\StrMid{abcdef}{2}{2}[\aa]\aa|
+\exemple|\StrMid{aaaaaa}{3}{6}[\aa]\aa|
+\exemple*|\StrMid{}{4}{5}[\aa]\aa|
+
+\chapitre{La macro}{StrGobbleLeft}
+
+\exemple|\StrGobbleLeft{abcdef}{3}|
+\exemple*|\StrGobbleLeft{a b c d}{3}|
+\exemple|\StrGobbleLeft{abcdef}{-3}|
+\exemple*|\StrGobbleLeft{abcdef}{9}|
+\exemple|\StrGobbleLeft{aaaaa}{4}|
+\exemple*|\StrGobbleLeft{}{2}|
+
+\AvecArgOptionnel
+\exemple|\StrGobbleLeft{abcdef}{3}[\aa]\aa|
+\exemple*|\StrGobbleLeft{a b c d}{3}[\aa]\aa|
+\exemple|\StrGobbleLeft{abcdef}{-3}[\aa]\aa|
+\exemple*|\StrGobbleLeft{abcdef}{9}[\aa]\aa|
+\exemple|\StrGobbleLeft{aaaaa}{4}[\aa]\aa|
+\exemple*|\StrGobbleLeft{}{2}[\aa]\aa|
+
+\chapitre{La macro}{StrGobbleRight}
+
+\exemple|\StrGobbleRight{abcdef}{3}|
+\exemple*|\StrGobbleRight{a b c d}{3}|
+\exemple|\StrGobbleRight{abcdef}{-3}|
+\exemple*|\StrGobbleRight{abcdef}{9}|
+\exemple|\StrGobbleRight{aaaaa}{4}|
+\exemple*|\StrGobbleRight{}{2}|
+
+\AvecArgOptionnel
+\exemple|\StrGobbleRight{abcdef}{3}[\aa]\aa|
+\exemple*|\StrGobbleRight{a b c d}{3}[\aa]\aa|
+\exemple|\StrGobbleRight{abcdef}{-3}[\aa]\aa|
+\exemple*|\StrGobbleRight{abcdef}{9}[\aa]\aa|
+\exemple|\StrGobbleRight{aaaaa}{4}[\aa]\aa|
+\exemple*|\StrGobbleRight{}{2}[\aa]\aa|
+
+\chapitre{La macro}{StrLeft}
+
+\exemple|\StrLeft{abcdef}{3}|
+\exemple*|\StrLeft{a b c d}{3}|
+\exemple*|\StrLeft{abcdef}{-3}|
+\exemple*|\StrLeft{abcdef}{9}|
+\exemple|\StrLeft{aaaaa}{4}|
+\exemple*|\StrLeft{}{2}|
+
+\AvecArgOptionnel
+\exemple|\StrLeft{abcdef}{3}[\aa]\aa|
+\exemple*|\StrLeft{a b c d}{3}[\aa]\aa|
+\exemple*|\StrLeft{abcdef}{-3}[\aa]\aa|
+\exemple*|\StrLeft{abcdef}{9}[\aa]\aa|
+\exemple|\StrLeft{aaaaa}{4}[\aa]\aa|
+\exemple*|\StrLeft{}{2}[\aa]\aa|
+
+\chapitre{La macro}{StrRight}
+
+\exemple|\StrRight{abcdef}{3}|
+\exemple*|\StrRight{a b c d}{3}|
+\exemple*|\StrRight{abcdef}{-3}|
+\exemple*|\StrRight{abcdef}{9}|
+\exemple|\StrRight{aaaaa}{4}|
+\exemple*|\StrRight{}{2}|
+
+\AvecArgOptionnel
+\exemple|\StrRight{abcdef}{3}[\aa]\aa|
+\exemple*|\StrRight{a b c d}{3}[\aa]\aa|
+\exemple*|\StrRight{abcdef}{-3}[\aa]\aa|
+\exemple*|\StrRight{abcdef}{9}[\aa]\aa|
+\exemple|\StrRight{aaaaa}{4}[\aa]\aa|
+\exemple*|\StrRight{}{2}[\aa]\aa|
+
+\chapitre{la macro}{StrChar}
+
+\exemple|\StrChar{abcdef}{5}|
+\exemple*|\StrChar{a b c d}{4}|
+\exemple|\StrChar{a b c d}{7}|
+\exemple*|\StrChar{abcdef}{10}|
+\exemple*|\StrChar{abcdef}{-5}|
+\exemple*|\StrChar{}{3}|
+
+\AvecArgOptionnel
+\exemple|\StrChar{abcdef}{5}[\aa]\aa|
+\exemple*|\StrChar{a b c d}{4}[\aa]\aa|
+\exemple|\StrChar{a b c d}{7}[\aa]\aa|
+\exemple*|\StrChar{abcdef}{10}[\aa]\aa|
+\exemple*|\StrChar{abcdef}{-5}[\aa]\aa|
+\exemple*|\StrChar{}{3}[\aa]\aa|
+
+\chapitre{La macro}{StrCount}
+
+\exemple|\StrCount{abcdef}{d}|
+\exemple|\StrCount{a b c d}{ }|
+\exemple|\StrCount{aaaaaa}{aa}|
+\exemple|\StrCount{abcdef}{Z}|
+\exemple|\StrCount{abcdef}{}|
+\exemple|\StrCount{}{a}|
+\exemple|\StrCount{}{}|
+
+\AvecArgOptionnel
+\exemple|\StrCount{abcdef}{d}[\aa]\aa|
+\exemple|\StrCount{a b c d}{ }[\aa]\aa|
+\exemple|\StrCount{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrCount{abcdef}{Z}[\aa]\aa|
+\exemple|\StrCount{abcdef}{}[\aa]\aa|
+\exemple|\StrCount{}{a}[\aa]\aa|
+\exemple|\StrCount{}{}[\aa]\aa|
+
+\chapitre{La macro}{StrPosition}
+
+\exemple|\StrPosition{abcdef}{c}|
+\exemple|\StrPosition{abcdef}{Z}|
+\exemple|\StrPosition{a b c d}{ }|
+\exemple|\StrPosition[3]{a b c d}{ }|
+\exemple|\StrPosition[8]{a b c d}{ }|
+\exemple|\StrPosition{aaaaaa}{aa}|
+\exemple|\StrPosition[2]{aaaaaa}{aa}|
+\exemple|\StrPosition[3]{aaaaaa}{aa}|
+\exemple|\StrPosition{abcdef}{}|
+\exemple|\StrPosition{}{a}|
+\exemple|\StrPosition{}{}|
+
+\AvecArgOptionnel
+\exemple|\StrPosition{abcdef}{c}[\aa]\aa|
+\exemple|\StrPosition{abcdef}{Z}[\aa]\aa|
+\exemple|\StrPosition{a b c d}{ }[\aa]\aa|
+\exemple|\StrPosition[3]{a b c d}{ }[\aa]\aa|
+\exemple|\StrPosition[8]{a b c d}{ }[\aa]\aa|
+\exemple|\StrPosition{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrPosition[2]{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrPosition[3]{aaaaaa}{aa}[\aa]\aa|
+\exemple|\StrPosition{abcdef}{}[\aa]\aa|
+\exemple|\StrPosition{}{a}[\aa]\aa|
+\exemple|\StrPosition{}{}[\aa]\aa|
+
+\chapitre{La macro}{StrCompare}
+
+La tolérance normale :\par
+\exemple|\StrCompare{abcdefghij}{abc}|
+\exemple|\StrCompare{A}{A}|
+\exemple|\StrCompare{abcdef}{a bd}|
+\exemple|\StrCompare{ }{ }|
+\exemple|\StrCompare{}{abcd}|
+\exemple|\StrCompare{abcd}{}|
+\exemple|\StrCompare{123456}{1234}|
+\exemple|\StrCompare{a b c d}{a bcd}|
+\exemple|\StrCompare{}{}|
+\exemple|\StrCompare{eee}{eeee}|
+\exemple|\StrCompare{eeee}{eee}|
+\exemple|\StrCompare{totutu}{tututu}|
+\exemple|\StrCompare{abcd}{abyz}|
+
+\AvecArgOptionnel
+\exemple|\StrCompare{abcdefghij}{abc}[\aa]\aa|
+\exemple|\StrCompare{A}{A}[\aa]\aa|
+\exemple|\StrCompare{abcdef}{a bd}[\aa]\aa|
+\exemple|\StrCompare{ }{ }[\aa]\aa|
+\exemple|\StrCompare{}{abcd}[\aa]\aa|
+\exemple|\StrCompare{abcd}{}[\aa]\aa|
+\exemple|\StrCompare{123456}{1234}[\aa]\aa|
+\exemple|\StrCompare{a b c d}{a bcd}[\aa]\aa|
+\exemple|\StrCompare{}{}[\aa]\aa|
+\exemple|\StrCompare{eee}{eeee}[\aa]\aa|
+\exemple|\StrCompare{eeee}{eee}[\aa]\aa|
+\exemple|\StrCompare{totutu}{tututu}[\aa]\aa|
+\exemple|\StrCompare{abcd}{abyz}[\aa]\aa|
+
+La tolérance stricte :\par\comparestrict
+\exemple|\StrCompare{abcdefghij}{abc}|
+\exemple|\StrCompare{A}{A}|
+\exemple|\StrCompare{abcdef}{a bd}|
+\exemple|\StrCompare{ }{ }|
+\exemple|\StrCompare{}{abcd}|
+\exemple|\StrCompare{abcd}{}|
+\exemple|\StrCompare{123456}{1234}|
+\exemple|\StrCompare{a b c d}{a bcd}|
+\exemple|\StrCompare{}{}|
+\exemple|\StrCompare{eee}{eeee}|
+\exemple|\StrCompare{eeee}{eee}|
+\exemple|\StrCompare{totutu}{tututu}|
+\exemple|\StrCompare{abcd}{abyz}|
+
+\AvecArgOptionnel
+\exemple|\StrCompare{abcdefghij}{abc}[\aa]\aa|
+\exemple|\StrCompare{A}{A}[\aa]\aa|
+\exemple|\StrCompare{abcdef}{a bd}[\aa]\aa|
+\exemple|\StrCompare{ }{ }[\aa]\aa|
+\exemple|\StrCompare{}{abcd}[\aa]\aa|
+\exemple|\StrCompare{abcd}{}[\aa]\aa|
+\exemple|\StrCompare{123456}{1234}[\aa]\aa|
+\exemple|\StrCompare{a b c d}{a bcd}[\aa]\aa|
+\exemple|\StrCompare{}{}[\aa]\aa|
+\exemple|\StrCompare{eee}{eeee}[\aa]\aa|
+\exemple|\StrCompare{eeee}{eee}[\aa]\aa|
+\exemple|\StrCompare{totutu}{tututu}[\aa]\aa|
+\exemple|\StrCompare{abcd}{abyz}[\aa]\aa|
+\vskip5em
+
+\hfill{\hugerm Le mode \hugett\string\noexpandarg}\hfill{}
+
+\vskip-1ex\hfil\hbox to8cm{\hrulefill}\hfil{}\vskip3.5ex
+
+Dans toute la suite sauf si c'est précisé, la commande {\tt\string\noexpandarg} est activée.\vskip1.5ex
+
+\catcode`\@=11\relax
+\expandafter\long\expandafter\def\csname xs_assign_verb\endcsname#1{%
+	\tokenize\cs@resultat{#1}%
+	\leavevmode\hbox to0.7\hsize{\hfil\tt#1}\quad\frontiere\cs@resultat\frontiere\hfil\par}%
+\catcode`\@=12\relax
+\noexpandarg
+
+\chapitre{Le test}{IfSubStr}
+
+\exemple|\noexploregroups|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{2}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{34}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{{34}}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\b}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\bc}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\bc5}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\bc{5}}{vrai}{faux}|
+\exemple|\IfSubStr[1]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\IfSubStr[2]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\IfSubStr[3]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\IfSubStr[4]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\exploregroups|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{2}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{34}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{{34}}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\b}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\bc}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\bc5}{vrai}{faux}|
+\exemple|\IfSubStr{1$2$\a{34}\bc5}{\bc{5}}{vrai}{faux}|
+\exemple|\IfSubStr[1]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\IfSubStr[2]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\IfSubStr[3]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+\exemple|\IfSubStr[4]{\a1{\a1{\a1}\a2}\a3}{\a}{vrai}{faux}|
+
+\chapitre{Le test}{IfBeginWith}
+
+Les tests doivent donner des résultats identiques ci-dessous puisque {\tt\string\IfBeginWith} est indifférent au mode d'exploration des groupes !\vskip0.7ex
+
+\exemple|\noexploregroups|
+\exemple|\IfBeginWith{{\a}123\b456}{\a}{vrai}{faux}|
+\exemple|\IfBeginWith{{\a}123\b456}{{\a}}{vrai}{faux}|
+\exemple|\IfBeginWith{{\a1}\b\c\d}{\a}{vrai}{faux}|
+\exemple|\IfBeginWith{{1}23456}{12}{vrai}{faux}|
+\exemple|\IfBeginWith{{1}23456}{1}{vrai}{faux}|
+\exemple|\IfBeginWith{{1}23456}{{1}2}{vrai}{faux}|
+\exemple|\exploregroups|
+\exemple|\IfBeginWith{{\a}123\b456}{\a}{vrai}{faux}|
+\exemple|\IfBeginWith{{\a}123\b456}{{\a}}{vrai}{faux}|
+\exemple|\IfBeginWith{{\a1}\b\c\d}{\a}{vrai}{faux}|
+\exemple|\IfBeginWith{{1}23456}{12}{vrai}{faux}|
+\exemple|\IfBeginWith{{1}23456}{1}{vrai}{faux}|
+\exemple|\IfBeginWith{{1}23456}{{1}2}{vrai}{faux}|
+
+\chapitre{Le test}{IfEndWith}
+
+Les tests doivent donner des résultats identiques ci-dessous puisque {\tt\string\IfEndWith} est indifférent au mode d'exploration des groupes !\vskip0.7ex
+
+\exemple|\noexploregroups|
+\exemple|\IfEndWith{\a1\b2{\c3}}{\c3}{vrai}{faux}|
+\exemple|\IfEndWith{\a1\b2{\c3}}{{\c3}}{vrai}{faux}|
+\exemple|\IfEndWith{\a1\b2{\c3}}{3}{vrai}{faux}|
+\exemple|\IfEndWith{12345{6}}{56}{vrai}{faux}|
+\exemple|\IfEndWith{12345{6}}{6}{vrai}{faux}|
+\exemple|\IfEndWith{12345{6}}{5{6}}{vrai}{faux}|
+\exemple|\exploregroups|
+\exemple|\IfEndWith{\a1\b2{\c3}}{\c3}{vrai}{faux}|
+\exemple|\IfEndWith{\a1\b2{\c3}}{{\c3}}{vrai}{faux}|
+\exemple|\IfEndWith{\a1\b2{\c3}}{3}{vrai}{faux}|
+\exemple|\IfEndWith{12345{6}}{56}{vrai}{faux}|
+\exemple|\IfEndWith{12345{6}}{6}{vrai}{faux}|
+\exemple|\IfEndWith{12345{6}}{5{6}}{vrai}{faux}|
+
+\chapitre{Le test}{IfSubStrBefore}
+
+\exemple|\noexploregroups|
+\exemple|\IfSubStrBefore[1,1]{\a1\a2\a3\b1\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[2,1]{\a1\a2\a3\b1\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[2,3]{\a1\a2\a3\b1\b2\b3}{\a}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,1]{\a1{\a2\a3\b1}\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,2]{\a1{\a2\a3\b1}\b2\b3}{3}{\b}{vrai}{faux}|
+\exemple|\exploregroups|
+\exemple|\IfSubStrBefore[1,1]{\a1\a2\a3\b1\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[2,1]{\a1\a2\a3\b1\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[2,3]{\a1\a2\a3\b1\b2\b3}{\a}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,1]{\a1{\a2\a3\b1}\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBefore[1,2]{\a1{\a2\a3\b1}\b2\b3}{3}{\b}{vrai}{faux}|
+
+\chapitre{Le test}{IfStrBehind}
+
+\exemple|\noexploregroups|
+\exemple|\IfSubStrBehind[2,1]{\a1\a2\a3\b1\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBehind[3,1]{\a1\a2\a3\b1\b2\b3}{\a}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,1]{\a1\a2\a3\b1\b2\b3}{\b}{3}{vrai}{faux}|
+\exemple|\IfSubStrBehind[2,1]{\a1{\a2\a3\b1}\b2\b3}{\b}{3}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,1]{\a1{\a2\a3\b1}\b2\b3}{3}{\b}{vrai}{faux}|
+\exemple|\exploregroups|
+\exemple|\IfSubStrBehind[2,1]{\a1\a2\a3\b1\b2\b3}{2}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBehind[3,1]{\a1\a2\a3\b1\b2\b3}{\a}{\b}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,1]{\a1\a2\a3\b1\b2\b3}{\b}{3}{vrai}{faux}|
+\exemple|\IfSubStrBehind[2,1]{\a1{\a2\a3\b1}\b2\b3}{\b}{3}{vrai}{faux}|
+\exemple|\IfSubStrBehind[1,1]{\a1{\a2\a3\b1}\b2\b3}{3}{\b}{vrai}{faux}|
+
+\chapitre{Le test}{IfInteger}
+
+Dans les exemples ci-dessous, on examine la différence de comportement de la macro {\tt\string\IfInteger} selon les modes de développement des arguments.\vskip0.7ex
+
+\exemple|\def\nbA{-12}\def\nbB{498}|
+\exemple|\def\nbAA{\nbA}\def\nbBB{\nbB}|\vskip0.7ex
+\exemple|\fullexpandarg|
+\exemple|\IfInteger{\nbA}{vrai}{faux}|
+\exemple|\IfInteger{\nbA5\nbA}{vrai}{faux}|
+\exemple|\IfInteger{\nbA6\nbB}{vrai}{faux}|
+\exemple|\IfInteger{\nbAA7\nbBB}{vrai}{faux}|\vskip0.7ex
+\exemple|\expandarg|
+\exemple|\IfInteger{\nbA}{vrai}{faux}|
+\exemple|\IfInteger{\nbA5\nbA}{vrai}{faux}|
+\exemple|\IfInteger{\nbA6\nbB}{vrai}{faux}|
+\exemple|\IfInteger{\nbAA7\nbBB}{vrai}{faux}|\vskip0.7ex
+\exemple|\noexpandarg|
+\exemple|\IfInteger{\nbA}{vrai}{faux}|
+\exemple|\IfInteger{\nbA5\nbA}{vrai}{faux}|
+\exemple|\IfInteger{\nbA6\nbB}{vrai}{faux}|
+\exemple|\IfInteger{\nbAA7\nbBB}{vrai}{faux}|
+
+\chapitre{Le test}{IfDecimal}
+
+Dans les exemples ci-dessous, on examine la différence de comportement de la macro {\tt\string\IfDecimal} selon les modes de développement des arguments.\vskip0.7ex
+
+\exemple|\def\nbA{-12}\def\nbB{498}|
+\exemple|\def\nbAA{\nbA}\def\nbBB{\nbB}|\vskip0.7ex
+\exemple|\fullexpandarg|
+\exemple|\IfDecimal{\nbA,\nbB}{vrai}{faux}|
+\exemple|\IfDecimal{\nbAA.\nbB}{vrai}{faux}|
+\exemple|\IfDecimal{\nbB,777}{vrai}{faux}|
+\exemple|\IfDecimal{3\nbB,777}{vrai}{faux}|
+\exemple|\IfDecimal{\nbB,\nbB}{vrai}{faux}|\vskip0.7ex
+\exemple|\expandarg|
+\exemple|\IfDecimal{\nbA,\nbB}{vrai}{faux}|
+\exemple|\IfDecimal{\nbAA.\nbB}{vrai}{faux}|
+\exemple|\IfDecimal{\nbB,777}{vrai}{faux}|
+\exemple|\IfDecimal{3\nbB,777}{vrai}{faux}|
+\exemple|\IfDecimal{\nbB,\nbB}{vrai}{faux}|\vskip0.7ex
+\exemple|\noexpandarg|
+\exemple|\IfDecimal{\nbA,\nbB}{vrai}{faux}|
+\exemple|\IfDecimal{\nbAA.\nbB}{vrai}{faux}|
+\exemple|\IfDecimal{\nbB,777}{vrai}{faux}|
+\exemple|\IfDecimal{3\nbB,777}{vrai}{faux}|
+\exemple|\IfDecimal{\nbB,\nbB}{vrai}{faux}|
+
+\chapitre{La macro}{StrBefore}
+
+\exemple|\noexploregroups|
+\exemple|\StrBefore[2]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[3]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[4]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[5]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[6]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrBefore[2]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[3]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[4]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[5]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBefore[6]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|
+
+\chapitre{La macro}{StrBehind}
+
+\exemple|\noexploregroups|
+\exemple|\StrBehind[2]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[3]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[4]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[5]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[6]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrBehind[2]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[3]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[4]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[5]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBehind[6]{1\a2\a3{4\a5{6\a7}8\a}9\a0}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|
+
+\chapitre{La macro}{StrBetween}
+
+La commande {\tt\string\StrBetween} opère en mode {\tt\string\noexploregroups}, quelque soit le mode d'exploration en cours.\vskip0.7ex
+
+\exemple|\StrBetween[1,3]{\a1\a2{3\a4}5\a6{7\a8}9\a0}{2}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBetween[2,3]{\a1\a2{3\a4}5\a6{7\a8}9\a0}{\a}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBetween[1,3]{\a1\a2{3\a4}5\a6{7\a8}9\a0}{3}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrBetween[2,4]{\a1\a2{3\a4}5\a6{7\a8}9\a0}{\a}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+
+\chapitre{La macro}{StrSubstitute}
+
+\exemple|\noexploregroups|
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{\a}{\X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute[2]{\a1{2\a{3\a}4\a}\a5\a}{\a}{\X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{2}{X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{{3\a}}{XXX}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{3\a}{XXX}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{a1{b1\bgroup c1}\egroup d1}{1}{X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\smallskip
+\exemple|\exploregroups|
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{\a}{\X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute[2]{\a1{2\a{3\a}4\a}\a5\a}{\a}{\X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{2}{X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{{3\a}}{XXX}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrSubstitute{\a1{2\a{3\a}4\a}\a5\a}{3\a}{XXX}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|
+\exemple|\StrSubstitute{a1{b1\bgroup c1}\egroup d1}{1}{X}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\smallskip
+
+\chapitre{La macro}{StrDel}
+
+\exemple|\noexploregroups|
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel[2]{\a1{2\a{3\a}4\a}\a5\a}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{2}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{{3\a}}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{3\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel[2]{\a1{2\a{3\a}4\a}\a5\a}{\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{2}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{{3\a}}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrDel{\a1{2\a{3\a}4\a}\a5\a}{3\a}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+
+\chapitre{La macro}{StrLen}
+
+\exemple|\noexploregroups|
+\exemple|\StrLen{a1{a2}{\a\b}{a3}a4}|
+\exemple|\exploregroups|
+\exemple|\StrLen{a1{a2}{\a\b}{a3}a4}|
+
+\chapitre{la macro}{StrSplit}
+
+\exemple|\noexploregroups|
+\exemple|\StrSplit{\a{\b{\c\d}\e}\f\g}{2}\xx\yy|
+\exemple|\#\detokenize\expandafter{\xx}\#\quad\#\detokenize\expandafter{\yy}\#|
+\exemple|\StrSplit{\a{\b{\c\d}\e}\f\g}{3}\xx\yy|
+\exemple|\#\detokenize\expandafter{\xx}\#\quad\#\detokenize\expandafter{\yy}\#|
+\exemple|\exploregroups|
+\exemple|\StrSplit{\a{\b{\c\d}\e}\f\g}{2}\xx\yy|
+\exemple|\#\detokenize\expandafter{\xx}\#\quad\#\detokenize\expandafter{\yy}\#|
+\exemple|\StrSplit{\a{\b{\c\d}\e}\f\g}{3}\xx\yy|
+\exemple|\#\detokenize\expandafter{\xx}\#\quad\#\detokenize\expandafter{\yy}\#|
+
+\chapitre{la macro}{StrMid}
+
+La commande {\tt\string\StrMid} opère en mode {\tt\string\noexploregroups}, quelque soit le mode d'exploration en cours.\vskip0.7ex
+
+\exemple|\StrMid{\a\b{\c\d}\e\f\g\h}{2}{6}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\StrMid{\a\b{\c\d}\e\f\g\h}{3}{4}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+
+\chapitre{La macro}{StrGobbleLeft}
+
+\exemple|\noexploregroups|
+\exemple|\StrGobbleLeft{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrGobbleLeft{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|
+
+\chapitre{La macro}{StrGobbleRight}
+
+\exemple|\noexploregroups|
+\exemple|\StrGobbleRight{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrGobbleRight{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+
+\chapitre{La macro}{StrLeft}
+
+\exemple|\noexploregroups|
+\exemple|\StrLeft{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrLeft{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|
+
+\chapitre{La macro}{StrRight}
+
+\exemple|\noexploregroups|
+\exemple|\StrRight{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrRight{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+
+\chapitre{la macro}{StrChar}
+
+\exemple|\noexploregroups|
+\exemple|\StrChar{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrChar{\a\b{\c\d\e}\f}{3}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+
+\chapitre{La macro}{StrCount}
+
+\exemple|\noexploregroups|
+\exemple|\StrCount{\a1{\a2{\a3\a4}\a5}\a6\a7}{\a}|
+\exemple|\StrCount{\a1{\a2{\a3\a4}\a5}\a6\a7}{2}|
+\exemple|\exploregroups|
+\exemple|\StrCount{\a1{\a2{\a3\a4}\a5}\a6\a7}{\a}|
+\exemple|\StrCount{\a1{\a2{\a3\a4}\a5}\a6\a7}{2}|
+
+\chapitre{La macro}{StrPosition}
+
+\exemple|\noexploregroups|
+\exemple|\StrPosition[3]{\a0\a1{\a{2\a3}4}\a5\a6}{\a}|
+\exemple|\StrPosition[4]{\a0\a1{\a{3\a4}5}\a6\a7}{\a}|
+\exemple|\StrPosition[1]{\a0\a1{\a{2\a3}4}\a5\a6}{2}|
+\exemple|\exploregroups|
+\exemple|\StrPosition[3]{\a0\a1{\a{2\a3}4}\a5\a6}{\a}|
+\exemple|\StrPosition[4]{\a0\a1{\a{2\a3}4}\a5\a6}{\a}|
+\exemple|\StrPosition[1]{\a0\a1{\a{2\a3}4}\a5\a6}{2}|
+
+\chapitre{La macro}{StrCompare}
+
+La commande {\tt\string\StrCompare} n'est pas affectée par le mode d'exploration.\vskip0.7ex
+
+\exemple|\comparenormal|
+\exemple|\StrCompare{\a{\b1}\c2}{\a\b1\c2}|
+\exemple|\StrCompare{{1\a2}3}{{1\a2}3}|
+\exemple|\StrCompare{{1\a2}3}{1\a23}|
+\exemple|\StrCompare{\a{\b\c}}{\a{\b\c}\d}|
+\exemple|\StrCompare{{\a}\b}{\a\b}|
+\exemple|\comparestrict|
+\exemple|\StrCompare{\a{\b1}\c2}{\a\b1\c2}|
+\exemple|\StrCompare{{1\a2}3}{{1\a2}3}|
+\exemple|\StrCompare{{1\a2}3}{1\a23}|
+\exemple|\StrCompare{\a{\b\c}}{\a{\b\c}\d}|
+\exemple|\StrCompare{{\a}\b}{\a\b}|
+
+\chapitre{La macro}{StrRemoveBraces}
+
+\exemple|\noexploregroups|
+\exemple|\StrRemoveBraces{\a1{\b2{\c3{\d4}}}\e5}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\exemple|\exploregroups|
+\exemple|\StrRemoveBraces{\a1{\b2{\c3{\d4}}}\e5}[\cmd]|
+\exemple|\detokenize\expandafter{\cmd}|\vskip0.7ex
+\end

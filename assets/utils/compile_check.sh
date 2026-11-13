@@ -1,9 +1,11 @@
 #!/bin/bash
 # compile_check.sh — Post-compilation quality checks
 # Usage: bash _utils/compile_check.sh paper/
+# Figure dimensions only: bash _utils/compile_check.sh --figure-sizes paper/
 # Checks: PDF exists, undefined refs, TOC, abstracts, bibliography, unused figures, figure stacking
 
 PAPER_DIR="${1:-paper}"
+if [ "$1" = "--figure-sizes" ]; then PAPER_DIR="${2:-paper}"; fi
 EXIT_CODE=0
 
 # ⛔ 检测可用 Python（Windows 上 python3 常是 Microsoft Store stub：不执行代码、退出码非0）。
@@ -18,6 +20,78 @@ for _py in "$MMW_PYTHON" python python3 py; do
     fi
 done
 [ -z "$PYTHON" ] && PYTHON="python3"   # 兜底（保持原行为）
+export PYTHONIOENCODING="utf-8" PYTHONUTF8="1"
+
+# 图尺寸检查供完整编译门禁和技能自检共用，不以统一最小宽度覆盖权威竖图尺寸。
+check_figure_sizes() {
+    PAPER_DIR="$PAPER_DIR" "$PYTHON" - <<'PYEOF'
+import os, re, sys
+from pathlib import Path
+paper = Path(os.environ['PAPER_DIR'])
+figdir = paper.parent / 'figures'
+inc = re.compile(r'\\includegraphics\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\}')
+parallel = re.compile(r'\\begin\{(minipage|subfigure|subfloat)\}.*?\\end\{\1\}|\\(?:subfloat|subfigure)\b.*?\\includegraphics\[[^\]]*\]\{[^}]*\}', re.S)
+def uncomment(text):
+    return re.sub(r'(?<!\\)%[^\n]*', '', text)
+def dimensions(opts):
+    out = {}
+    for part in opts.split(','):
+        part = re.sub(r'\s+', '', part)
+        if part.startswith(('width=', 'height=')):
+            key, value = part.split('=', 1)
+            m = re.fullmatch(r'([0-9]*\.?[0-9]+)(\\\w+)', value)
+            out[key] = (float(m[1]), m[2]) if m else value
+        elif part == 'keepaspectratio':
+            out[part] = True
+    return out
+auth = {}
+li = figdir / 'latex_includes.tex'
+if li.is_file():
+    for opts, name in inc.findall(uncomment(li.read_text(encoding='utf-8'))):
+        auth[Path(name).name] = dimensions(opts)
+failures = []
+for source in [paper / 'main.tex', *sorted((paper / 'sections').glob('*.tex'))]:
+    if not source.is_file(): continue
+    text = parallel.sub('', uncomment(source.read_text(encoding='utf-8', errors='replace')))
+    for opts, name in inc.findall(text):
+        got = dimensions(opts)
+        base = Path(name).name
+        if base in auth:
+            if got != auth[base]:
+                failures.append(f'{source.name}: {base} dimensions differ from latex_includes.tex')
+            continue
+        # 未登记图有可读 PDF 时，使用与 fig_include_size.py 一致的长宽比分档。
+        expected = None
+        try:
+            import fitz
+            with fitz.open(str(figdir / base)) as doc:
+                rect = doc[0].rect
+                ratio = rect.height / rect.width
+                wc = next((w for bound, w in [(0.8, .85), (1.2, .70), (1.6, .50)] if ratio <= bound), .42)
+                expected = {'width': (wc, r'\textwidth'), 'height': (.8, r'\textheight'), 'keepaspectratio': True}
+        except Exception:
+            pass
+        if expected is not None:
+            if got != expected:
+                failures.append(f'{source.name}: {base} must use aspect-ratio dimensions {expected}')
+            continue
+        width, height = got.get('width'), got.get('height')
+        if isinstance(width, tuple) and width[1] in (r'\textwidth', r'\linewidth', r'\columnwidth') and width[0] < .7:
+            failures.append(f'{source.name}: {base} small width without authority or readable aspect ratio')
+        if isinstance(height, tuple) and height[1] == r'\textheight' and height[0] < .5:
+            failures.append(f'{source.name}: {base} small height without authority or readable aspect ratio')
+for failure in failures:
+    print('  FAIL: ' + failure)
+if not failures:
+    print('  OK: figure dimensions match authority/aspect ratio; genuine parallel panels preserved')
+sys.exit(1 if failures else 0)
+PYEOF
+}
+
+if [ "$1" = "--figure-sizes" ]; then
+    check_figure_sizes
+    exit $?
+fi
 
 echo "=== Post-compile checks ($PAPER_DIR) ==="
 
@@ -424,29 +498,9 @@ for f in "$PAPER_DIR"/sections/*.tex; do
 done
 [ "$total_stacking" -eq 0 ] && echo "  OK: no figure stacking"
 
-# 9.5 Subfigure abuse and small figure width detection
-echo "--- Subfigure / small figure check ---"
-subfig_abuse=0
-small_width=0
-for f in "$PAPER_DIR"/sections/*.tex; do
-    [ -f "$f" ] || continue
-    bn=$(basename "$f")
-    # Check for subfigure usage (forbidden in competition papers)
-    sf_count=$(grep -c '\\begin{subfigure}' "$f" 2>/dev/null || true); sf_count=${sf_count:-0}
-    if [ "$sf_count" -gt 0 ]; then
-        echo "  FAIL: $bn uses subfigure ($sf_count times) — competition papers must use independent figure environments, not subfigure"
-        subfig_abuse=$((subfig_abuse + sf_count))
-        EXIT_CODE=1
-    fi
-    # Check for small figure widths (< 0.7\textwidth)
-    small=$(grep -oP 'width\s*=\s*0\.\d+\\textwidth' "$f" 2>/dev/null | grep -oP '0\.\d+' | awk '$1 < 0.7 {print}' | wc -l)
-    if [ "$small" -gt 0 ]; then
-        echo "  FAIL: $bn has $small figures with width < 0.7\\textwidth — figures too small, use ≥ 0.85\\textwidth"
-        small_width=$((small_width + small))
-        EXIT_CODE=1
-    fi
-done
-[ "$subfig_abuse" -eq 0 ] && [ "$small_width" -eq 0 ] && echo "  OK: no subfigure abuse or small figures"
+# 9.5 统一图尺寸验收：权威 includes 优先，再用真实比例，未登记/不可测图才做兜底。
+echo "--- Figure dimensions ---"
+check_figure_sizes || EXIT_CODE=1
 
 # 10. TikZ architecture diagram check (against plan)
 tikz_exists=$([ -s figures/tikz_architecture_examples.tex ] && echo "YES" || echo "NO")

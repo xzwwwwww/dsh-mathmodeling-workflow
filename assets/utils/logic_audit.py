@@ -16,14 +16,16 @@
   figures/*_results.json (各问结果)
   code/*.py              (源码，用于特征完整性/重复计量的文本核对)
 
-⛔ 全软失败：合同缺 / 文件缺 / 字段缺 → 该条跳过，绝不误判为失败。
-   只有"合同齐全 + 确凿违反"才计 FAIL(退出码1)。防老工作流/合同没填全被误杀。
+⛔ 合同缺 / 文件缺 / 完全无探针 → 该条跳过。
+   已提供的方向探针必须有合法数值符号；字段非法、探针与合同冲突或确凿违反计 FAIL(退出码1)。
 
 退出码：0=通过(可能带WARN)  1=确凿逻辑错(必修)  2=无据可查(跳过，不阻塞)
 用法：python _utils/logic_audit.py [--stage code] [--contract ...] [--facts DATA_FACTS.json] [--figdir figures] [--codedir code]
 """
 from __future__ import annotations
 import sys
+import ast
+import math
 import re
 import json
 import argparse
@@ -52,7 +54,8 @@ def _as_float(x):
     try:
         if isinstance(x, bool):
             return None
-        return float(x)
+        value = float(x)
+        return value if math.isfinite(value) else None
     except (TypeError, ValueError):
         return None
 
@@ -97,6 +100,8 @@ def _collect_results(fig_dir: Path) -> dict:
     except Exception:
         return out
     for f in cands:
+        if f.name.startswith("TABLE_DATA_CHECK_"):
+            continue
         d = _load_json(f)
         if not isinstance(d, dict):
             continue
@@ -124,6 +129,8 @@ def _load_raw_results(fig_dir: Path) -> dict:
     if isinstance(allr, dict):
         cands = [fig_dir / "all_results.json"] + cands
     for f in cands:
+        if f.name.startswith("TABLE_DATA_CHECK_"):
+            continue
         d = _load_json(f)
         if not isinstance(d, dict):
             continue
@@ -204,30 +211,61 @@ def audit_feature_completeness(contract: dict, code_blob: str) -> list:
 
 
 def audit_double_count(contract: dict, code_blob: str) -> list:
-    """重复计量(FAIL)：合同声明"总量 aggregate 已吸收分项 contains"，
-    但代码里出现 `aggregate + ... contains`(同一行把两者相加) → 判重复计入。
-    保守：需同一行同时出现 aggregate 和 contains 且有 '+'，才 FAIL。"""
+    """Only prove duplicate signed additive terms using Python AST, never a same-line '+' heuristic.
+
+    Unknown products/calls/indexing are deliberately not treated as proven additions. This is
+    a conservative source check, not symbolic execution or inference across assignments.
+    """
     fails = []
     rules = contract.get("no_double_count")
     if not isinstance(rules, list) or not code_blob:
         return fails
-    lines = code_blob.splitlines()
+    try:
+        tree = ast.parse(code_blob)
+    except (SyntaxError, ValueError):
+        return fails  # incomplete/non-Python source is not proof of double counting
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+
+    def additive(node):
+        return isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)) or (
+            isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)))
+
+    def coefficients(node, scale=1.0, out=None):
+        out = {} if out is None else out
+        if isinstance(node, ast.Name):
+            out[node.id] = out.get(node.id, 0) + scale
+        elif isinstance(node, ast.Attribute):
+            key = ast.unparse(node)
+            out[key] = out.get(key, 0) + scale
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+            coefficients(node.left, scale, out)
+            coefficients(node.right, scale if isinstance(node.op, ast.Add) else -scale, out)
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            coefficients(node.operand, -scale if isinstance(node.op, ast.USub) else scale, out)
+        return out
+
+    expressions = [n for n in ast.walk(tree) if additive(n) and not additive(parents.get(n))]
     for rule in rules:
         if not isinstance(rule, dict):
             continue
-        agg = rule.get("aggregate")
-        con = rule.get("contains")
-        if not (isinstance(agg, str) and isinstance(con, str) and agg and con):
+        agg, con = rule.get("aggregate"), rule.get("contains")
+        if not (isinstance(agg, str) and isinstance(con, str) and agg and con and agg != con):
             continue
-        ra = re.compile(r"(?<![\w])" + re.escape(agg) + r"(?![\w])")
-        rc = re.compile(r"(?<![\w])" + re.escape(con) + r"(?![\w])")
-        for ln in lines:
-            if "+" in ln and ra.search(ln) and rc.search(ln):
-                fails.append(
-                    f"[重复计量] 合同声明「{agg}」已含「{con}」，但代码里又把二者相加："
-                    f"`{ln.strip()[:80]}` —— 同一部分被计两次。")
+        for node in expressions:
+            terms = coefficients(node)
+            if terms.get(agg, 0) * terms.get(con, 0) > 0:
+                source = ast.get_source_segment(code_blob, node) or ast.unparse(node)
+                fails.append(f"[重复计量] 合同声明「{agg}」已含「{con}」，但代码里二者被同向相加："
+                             f"`{source.strip()[:80]}` —— 同一部分被计两次。")
                 break
     return fails
+
+
+def _direction_number(value):
+    # Match the JS probe schema exactly: JSON numbers only, never bool or numeric strings.
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return float(value)
 
 
 def audit_direction(contract: dict, results_raw: dict) -> tuple:
@@ -253,17 +291,57 @@ def audit_direction(contract: dict, results_raw: dict) -> tuple:
     """
     fails, warns = [], []
     probes = results_raw.get("logic_probes") if isinstance(results_raw, dict) else None
+    bound_rules, monotonic_rules = {}, {}
+    for rule in (contract.get("bounds") or []):
+        if not isinstance(rule, dict) or not rule.get("quantity"):
+            continue
+        key = rule["quantity"]
+        if key in bound_rules:
+            first = str(bound_rules[key].get("is", "")).strip().lower()
+            other = str(rule.get("is", "")).strip().lower()
+            if first in ("upper", "lower") and other in ("upper", "lower") and first != other:
+                fails.append(f"[合同冲突] 「{key}」重复 bounds 同时声明 upper/lower。")
+            elif first not in ("upper", "lower") and other in ("upper", "lower"):
+                bound_rules[key] = rule
+        else:
+            bound_rules[key] = rule
+    for rule in (contract.get("monotonic") or []):
+        if not isinstance(rule, dict) or not rule.get("more") or not rule.get("then"):
+            continue
+        key = (rule["more"], rule["then"])
+        if key in monotonic_rules:
+            first = monotonic_rules[key]
+            d1, d2 = str(first.get("dir", "")).strip().lower(), str(rule.get("dir", "")).strip().lower()
+            s1, s2 = _direction_number(first.get("expect_sign")), _direction_number(rule.get("expect_sign"))
+            if (d1 and d2 and d1 != d2) or (s1 and s2 and (s1 > 0) != (s2 > 0)):
+                fails.append(f"[合同冲突] 「{key[0]}→{key[1]}」重复 monotonic 声明方向不一致。")
+            monotonic_rules[key] = {**first, "dir": d1 or d2, "expect_sign": s1 or s2}
+        else:
+            monotonic_rules[key] = rule
     if not isinstance(probes, dict):
         return fails, warns
-    # 1) 界方向：claim=upper 期望 sign<0；claim=lower 期望 sign>0
+    # 1) The contract is authoritative; a probe cannot relabel upper as lower to pass.
     for b in (probes.get("bounds") or []):
         if not isinstance(b, dict):
             continue
-        claim = str(b.get("claim", "")).lower()
-        sign = _as_float(b.get("probe_delta_sign"))
+        probe_claim = str(b.get("claim", "")).strip().lower()
         qty = b.get("quantity", "?")
-        if claim not in ("upper", "lower") or sign is None or sign == 0:
-            continue  # 信息不全/无变化 → 跳过，不误判
+        rule = bound_rules.get(qty, {})
+        declared = str(rule.get("is", "")).strip().lower()
+        if declared in ("upper", "lower") and "claim" in b and probe_claim != declared:
+            fails.append(f"[探针/合同冲突] 「{qty}」探针 claim={probe_claim} 与合同 bounds.is={declared} 不一致。")
+        claim = declared if declared in ("upper", "lower") else probe_claim
+        if "probe_delta_sign" in b:
+            sign = _direction_number(b["probe_delta_sign"])
+        else:
+            sign = _direction_number(b.get("observed_sign"))
+            if "observed_sign" in b:
+                warns.append(f"[兼容探针] 「{qty}」使用旧字段 observed_sign，请改为 probe_delta_sign。")
+        if sign is None:
+            fails.append(f"[探针格式错误] 「{qty}」缺有效数值 probe_delta_sign（旧字段 observed_sign 仅在新字段缺失时兼容）。")
+            continue
+        if claim not in ("upper", "lower") or sign == 0:
+            continue  # 无有效合同方向/合法零变化 → 跳过
         expect_neg = (claim == "upper")   # 上界→应减小(负)
         if (sign < 0) != expect_neg:
             got = "减小" if sign < 0 else "增大"
@@ -276,10 +354,22 @@ def audit_direction(contract: dict, results_raw: dict) -> tuple:
     for m in (probes.get("monotonic") or []):
         if not isinstance(m, dict):
             continue
-        osign = _as_float(m.get("observed_sign"))
-        exp_sign = _as_float(m.get("expect_sign"))  # 可选：+1/-1，给了才硬判
+        osign = _direction_number(m.get("observed_sign"))
         more, then = m.get("more", "?"), m.get("then", "?")
-        if osign is None or osign == 0:
+        rule = monotonic_rules.get((more, then), {})
+        declared_dir = str(rule.get("dir", rule.get("expect_dir", ""))).strip().lower()
+        probe_dir = str(m.get("expect_dir", "")).strip().lower()
+        if declared_dir and "expect_dir" in m and declared_dir != probe_dir:
+            fails.append(f"[探针/合同冲突] 「{more}→{then}」探针 expect_dir={probe_dir} 与合同 dir={declared_dir} 不一致。")
+        declared_sign = _direction_number(rule.get("expect_sign"))
+        probe_sign = _direction_number(m.get("expect_sign"))
+        if declared_sign and "expect_sign" in m and (probe_sign is None or probe_sign == 0 or (declared_sign > 0) != (probe_sign > 0)):
+            fails.append(f"[探针/合同冲突] 「{more}→{then}」探针 expect_sign 与合同 expect_sign 反向或格式错误。")
+        exp_sign = declared_sign if declared_sign is not None else probe_sign
+        if osign is None:
+            fails.append(f"[探针格式错误] 「{more}→{then}」缺有效数值 observed_sign。")
+            continue
+        if osign == 0:
             continue
         if exp_sign is not None and exp_sign != 0:
             if (osign > 0) != (exp_sign > 0):

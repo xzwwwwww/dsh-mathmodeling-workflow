@@ -13,10 +13,10 @@ BLOCK_RE = re.compile(
     re.DOTALL,
 )
 ITEM_RE = re.compile(
-    r"^\s*(?:-\s*)?(?:\[[ xX]\]\s*)?((?:fig_|tikz_|TABLE_)[A-Za-z0-9_]+)(.*)$"
+    r"^\s*(?:-\s*)?(?:\[[ xX]\]\s*)?`?((?:fig_|tikz_|TABLE_)[A-Za-z0-9_]+)`?(.*)$"
 )
 TABLE_ROW_RE = re.compile(
-    r"^\s*\|\s*(TABLE_[A-Za-z0-9_]+)(.*\|\s*)$"
+    r"^\s*\|\s*`?(TABLE_[A-Za-z0-9_]+)`?(.*\|\s*)$"
 )
 
 
@@ -55,10 +55,14 @@ def _category(heading: str) -> str:
     # Classify by the semantic heading before inspecting that suffix.
     if re.search(r"数据图|data\s*(?:figure|plot|chart)s?", heading, re.IGNORECASE):
         return "DATA"
+    if "gpt" in value or "image" in value:
+        return "GPTIMG"
     if "drawio" in value or "html" in value:
         return "DRAWIO"
-    if "gpt" in value or "场景" in heading:
+    if re.search(r"场景|概念|机理|机制|系统示意", heading):
         return "GPTIMG"
+    if re.search(r"流程|结构图|架构图|逐问", heading):
+        return "DRAWIO"
     if "table" in value or "表格" in heading:
         return "TABLE"
     return "DATA"

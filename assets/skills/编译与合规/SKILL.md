@@ -30,7 +30,7 @@ if ! which xelatex 2>/dev/null; then
         initexmf --set-config-value=[MPM]AutoInstall=1
     fi
 fi
-which xelatex && which bibtex && echo "ready" || echo "xelatex/bibtex not found"
+which xelatex && echo "ready (BibTeX needed only for external bibliography)" || echo "xelatex not found"
 fc-list :lang=zh | head -5
 kpsewhich gbt7714.sty 2>/dev/null || echo "gbt7714.sty not found (will auto-install on first compile)"
 ```
@@ -183,11 +183,15 @@ done
 ### Step 3: Compile (manual steps, no latexmk)
 
 ```bash
+(
+set -e
 cd paper/
-xelatex -interaction=nonstopmode main.tex
-bibtex main
-xelatex -interaction=nonstopmode main.tex
-xelatex -interaction=nonstopmode main.tex
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+# 按实际 aux 分流：inline thebibliography 不请求 BibTeX。
+if grep -q '\\bibdata{' main.aux; then bibtex main; fi
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+)
 ```
 
 ### Step 4: Error fix loop (MANDATORY — do NOT skip)
@@ -232,12 +236,14 @@ fi
 
 **After each fix, recompile and recheck:**
 ```bash
+(
+set -e
 cd paper/
-xelatex -interaction=nonstopmode main.tex
-bibtex main 2>&1 | tail -5
-xelatex -interaction=nonstopmode main.tex
-xelatex -interaction=nonstopmode main.tex
-cd ..
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+if grep -q '\\bibdata{' main.aux; then bibtex main; fi
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+)
 # Recheck
 MATH_ERR=$(grep -c 'Bad math environment delimiter\|Missing \$ inserted' paper/main.log 2>/dev/null || true); MATH_ERR=${MATH_ERR:-0}
 echo "Remaining math errors: $MATH_ERR"
@@ -250,7 +256,17 @@ When fixing errors in main.tex, only fix the specific error (e.g., add a missing
 ### Step 5: Post-compile checks
 
 ```bash
-bash _utils/compile_check.sh paper/ 2>/dev/null || bash skills/shared-scripts/compile_check.sh paper/
+CC_SCRIPT=""
+for candidate in _utils/compile_check.sh skills/shared-scripts/compile_check.sh; do
+    if [ -f "$candidate" ]; then CC_SCRIPT="$candidate"; break; fi
+done
+if [ -n "$CC_SCRIPT" ]; then
+    bash "$CC_SCRIPT" paper/
+    CC_EXIT=$?
+else
+    echo "FAIL: compile_check.sh not found"
+    CC_EXIT=127
+fi
 ```
 
 The script checks: PDF existence/size, undefined references, overfull hbox, TOC, abstracts, bibliography entries, citation count, citation format (上标/顺序/合并), unused figures, figure stacking, TikZ diagram presence.
@@ -278,7 +294,7 @@ compile_check.sh 会检查 3 类引用格式问题，任何一类 FAIL/WARN 都�
      grep -rnoP '\\(up)?cite\{[^}]+\}\s*\\(up)?cite\{[^}]+\}' paper/sections/*.tex paper/main.tex
      ```
 
-**⛔ 修复后必须重新编译验证：** `xelatex → bibtex → xelatex → xelatex`，然后重新运行 compile_check.sh 确认无 FAIL。
+**⛔ 修复后必须重新编译验证：** 按 Step 3 执行 `xelatex → 按 aux 需要运行 BibTeX → xelatex → xelatex`，然后重新运行 compile_check.sh 确认无 FAIL。
 
 Additionally check:
 ```bash
@@ -359,7 +375,7 @@ If pages < 80% of MAX_PAGES, attempt to expand the thinnest 1-2 chapters:
 
 **⚠ 再次强调：`MAX_PAGES` 是页数下限/目标，不是天花板。** 除非竞赛简章白纸黑字写了硬性页数上限（会在 Additional Parameters 里另行注明），否则**页数超了完全没问题，绝不能主动压页**。**严禁自己臆想一个「≤30 页」之类的上限再去压图**——国赛（CUMCM）等多数竞赛并无硬性页数上限。
 
-**图的尺寸由写作规则 + `compile_utils.sh` 兜底唯一决定：单图恒 `width=0.85\textwidth`（并排双栏才 `0.48`），高度兜底为 `height=0.9\textheight`（防单图独占整页）。编译期绝不许因为页数去改图宽或压小图高。**
+**图尺寸以 `figures/latex_includes.tex` 为权威，由 `fig_include_size.py` 按真实长宽比生成：宽度 0.85 / 0.70 / 0.50 / 0.42、统一限高 0.80 textheight 均合法；真实并排图保留局部尺寸。`compile_utils.sh` 按权威参数回填。禁止统一强制 0.85，也不得因为页数改尺寸。**
 
 **⛔ 特别警告——压小 `height` 是最隐蔽的凑页手段：** 给图加 `height=0.20\textheight` 这类小限高，在 `keepaspectratio` 下会先于 width 生效，把近方图/竖图卡成一小块（图又小又挤成一堆）。这和压图宽同样恶劣，同样禁止。`compile_utils.sh` 会自动剥离 `<0.5\textheight` 的限高并补回 `0.9\textheight`，编译期不得反向再压。
 
@@ -371,27 +387,31 @@ If pages < 80% of MAX_PAGES, attempt to expand the thinnest 1-2 chapters:
 4. 删除非必要的重复图/表（一张图重复出现多次时）。
 
 **⛔ 绝对禁止的凑页手段（出现即判不合格，必须回退）：**
-- ❌ 把 `\includegraphics` 的 width 从 `0.85` 改小（如 `0.6/0.5/0.48/0.46\textwidth`）来省空间；
+- ❌ 为凑页数修改权威图尺寸（按长宽比生成的 0.42/0.50/0.70 和真实并排图尺寸必须保留）；
 - ❌ 给 `\includegraphics` 加 `height=0.NN\textheight` 小限高（如 `0.20/0.22/0.3\textheight`）压小图来省空间；
 - ❌ 在 `\begin{document}` 后注入全局 `\small` / `\footnotesize` 等正文降字号；
 - ❌ 给正文（非表格）套任何全局缩字号命令。
 
 **自检（Step 7 质量门禁前必跑）：**
 ```bash
-echo "=== 图宽合规自检（禁凑页压图）==="
-# 只看 includegraphics 的 width 系数；<0.80 视为被凑页压小（真正并排双栏请写 0.48 并用 subfigure/minipage，本检测会提示、人工确认即可）
-BAD_W=$(grep -rhoE 'includegraphics\[[^]]*width=0\.[0-9]+' paper/sections/*.tex paper/main.tex 2>/dev/null | grep -oE 'width=0\.[0-9]+' | grep -vE 'width=0\.(8[0-9]|9[0-9])' | wc -l)
-[ "$BAD_W" -eq 0 ] && echo "OK 无过小图宽" || echo "FAIL 有 $BAD_W 处图宽<0.80（疑似凑页压图，除真正并排双栏外必须改回 0.85）"
-echo "=== 图高合规自检（禁压小图高凑页）==="
-# <0.5\textheight 的限高视为凑页压图；compile_utils.sh 本应剥离，若仍残留说明预处理没跑或被反向压回
-BAD_H=$(grep -rhoE 'includegraphics\[[^]]*height=0?\.[0-9]+' paper/sections/*.tex paper/main.tex 2>/dev/null | grep -oE 'height=0?\.[0-9]+' | grep -vE 'height=0?\.([5-9][0-9]*)' | wc -l)
-[ "$BAD_H" -eq 0 ] && echo "OK 无过小限高" || echo "FAIL 有 $BAD_H 处 height<0.5\\textheight（凑页压图，须删该限高让 compile_utils.sh 补回 0.9）"
+echo "=== 图尺寸合规自检（权威尺寸/长宽比/真实并排）==="
+SIZE_SCRIPT=""
+for candidate in _utils/compile_check.sh skills/shared-scripts/compile_check.sh; do
+    if [ -f "$candidate" ]; then SIZE_SCRIPT="$candidate"; break; fi
+done
+if [ -n "$SIZE_SCRIPT" ]; then
+    bash "$SIZE_SCRIPT" --figure-sizes paper/
+    SIZE_EXIT=$?
+else
+    echo "FAIL: compile_check.sh not found"
+    SIZE_EXIT=127
+fi
 echo "=== 全局 small 自检（禁正文降字号）==="
 # \begin{document} 到 \maketitle 之间若单独出现 \small/\footnotesize/\scriptsize，即全局降字号
 AFTER_DOC=$(awk '/begin\{document\}/,/maketitle/' paper/main.tex 2>/dev/null | grep -cE '^[[:space:]]*[\](small|footnotesize|scriptsize)([[:space:]]|$)')
 [ "$AFTER_DOC" -eq 0 ] && echo "OK document 后无全局降字号" || echo "FAIL document 后有全局 small/footnotesize（凑页降字号，必须删）"
 ```
-三项都必须 OK；任一 FAIL 都要先修回（图宽改回 0.85、删过小限高、删全局 small），再重编译。
+必须 SIZE_EXIT=0 且无全局正文降字号；失败时恢复各图权威尺寸、删全局 small，再重编译。
 </page_overflow>
 
 ### Step 7: ⛔ FINAL QUALITY GATE (must ALL pass before finishing)
@@ -552,10 +572,28 @@ echo "--- Full check scripts ---"
 #    compile_check 的退出码被覆盖丢弃 → 它 506 行的检查白跑、FAIL 不计分。
 #    现在两者都计入 GATE_FAIL，本项就成了「引用格式/未定义引用/hbox/vbox/未用图/
 #    图堆叠/模板包冲突…」等一大批检查的权威裁判，下面手工项里与之重叠的已删除。
-bash _utils/compile_check.sh paper/ 2>/dev/null || bash skills/shared-scripts/compile_check.sh paper/ 2>/dev/null
-CC_EXIT=$?
-bash _utils/writing_check.sh paper/ 2>/dev/null || bash skills/shared-scripts/writing_check.sh paper/ 2>/dev/null
-WC_EXIT=$?
+CC_SCRIPT=""
+for candidate in _utils/compile_check.sh skills/shared-scripts/compile_check.sh; do
+    if [ -f "$candidate" ]; then CC_SCRIPT="$candidate"; break; fi
+done
+if [ -n "$CC_SCRIPT" ]; then
+    bash "$CC_SCRIPT" paper/
+    CC_EXIT=$?
+else
+    echo "FAIL: compile_check.sh not found"
+    CC_EXIT=127
+fi
+WC_SCRIPT=""
+for candidate in _utils/writing_check.sh skills/shared-scripts/writing_check.sh; do
+    if [ -f "$candidate" ]; then WC_SCRIPT="$candidate"; break; fi
+done
+if [ -n "$WC_SCRIPT" ]; then
+    bash "$WC_SCRIPT" paper/
+    WC_EXIT=$?
+else
+    echo "FAIL: writing_check.sh not found"
+    WC_EXIT=127
+fi
 [ "$CC_EXIT" -eq 0 ] && echo "✅ compile_check passed" || { echo "❌ compile_check failed (exit=$CC_EXIT) — 看上方明细逐条修"; GATE_FAIL=$((GATE_FAIL+1)); }
 [ "$WC_EXIT" -eq 0 ] && echo "✅ writing_check passed" || { echo "❌ writing_check failed (exit=$WC_EXIT) — 看上方明细逐条修"; GATE_FAIL=$((GATE_FAIL+1)); }
 
@@ -788,7 +826,7 @@ echo "=========================================="
 **⛔⛔ 省重编修复顺序（治"编译卡很久"的关键——大多数 ❌ 是源码类，改完不必重编）：**
 
 1. **先批量修完所有【源码类】❌**（见本门开头总则的清单：图注超长 / 引用格式 / 占位符 / meta / AI列表 / 长表格 / 数值一致 / 模板完整 …）。这些只改 `paper/sections/*.tex` 或 `main.tex` 文本，**期间一次都不要重编**——它们和已编译 PDF 的 hbox/页数/TOC 无关，改完直接 grep 就能重判。
-2. **所有源码类改完后 → 统一重编一次**：`cd paper/ && xelatex→bibtex→xelatex→xelatex`。
+2. **所有源码类改完后 → 统一重编一次**：按 Step 3 执行 `xelatex → 按 aux 需要运行 BibTeX → xelatex → xelatex`。
 3. **重编后只重跑【产物类】检查**（#16 TOC / #5 页数 / #18 compile_check 的 hbox·vbox·未定义引用）。
 4. **仅当【产物类】还有 ❌ 时**（通常是页数不足或 hbox），才针对性修 + 再重编一次。
 5. **重复直到 GATE_FAIL=0**，但每一轮都遵循"源码类批量改→只重编一次"，**严禁每修一个源码类问题就重编 57 页**。

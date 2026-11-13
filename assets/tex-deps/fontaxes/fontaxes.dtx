@@ -1,0 +1,215 @@
+% \iffalse meta-comment
+%
+% Copyright (c) 2007 by Andreas Bühmann
+% Copyright (c) 2025 by Michael Ummels <michael@ummels.de>
+%
+% This work may be distributed and/or modified under the
+% conditions of the LaTeX Project Public License, either version 1.3c
+% of this license or (at your option) any later version.
+% The latest version of this license is in
+%   http://www.latex-project.org/lppl.txt
+% and version 1.3 or later is part of all distributions of LaTeX
+% version 2005/12/01 or later.
+%
+% This work has the LPPL maintenance status `maintained'.
+%
+% The Current Maintainer of this work is Michael Ummels.
+%
+% This work consists of the files fontaxes.dtx, fontaxes.ins and
+% the derived file fontaxes.sty.
+%
+%<*driver>
+\documentclass[a4paper]{ltxdoc}
+
+\usepackage[T1]{fontenc}
+\usepackage{fontaxes}
+\usepackage{hypdoc}
+\usepackage[toc,enum,bib,lineno]{tabfigures}
+\usepackage[scale=0.95]{cantarell}
+\usepackage[narrow]{inconsolata}
+\usepackage{microtype}
+
+\hypersetup{
+  bookmarksnumbered,
+  colorlinks=false,
+  pdfborder={0 0 0},
+}
+
+% Hack in order to get quotes in verbatim mode right
+\DeclareEncodingSubset{TS1}{zi4}{1}
+
+\renewcommand\sfdefault{cantarell-OsF}
+\renewcommand\familydefault{\sfdefault}
+\renewcommand\baselinestretch{1.1}
+
+\newcommand*\pkg[1]{\mbox{#1}}
+\newcommand*\axis[1]{\textit{#1}}
+
+\OnlyDescription
+
+\begin{document}
+\DocInput{fontaxes.dtx}
+\end{document}
+%</driver>
+%\fi
+%
+% \GetFileInfo{fontaxes.sty}
+%
+% \title{The fontaxes package (deprecated)}
+% \author{Michael Ummels}
+% \date{\fileversion\quad\filedate}
+% \maketitle
+%
+% \begin{abstract}
+% \textbf{Deprecated:} The \pkg{fontaxes} package simulates multiple independent
+% font selection axes on top of certain single NFSS axes: \axis{base family},
+% \axis{figure style}, and \axis{figure alignment} on top of \axis{family};
+% \axis{primary shape} and \axis{secondary shape} on top of \axis{shape};
+% and \axis{math weight} and \axis{math figure alignment} on top of
+% \axis{math version}.
+% \end{abstract}
+%
+% \section{Introduction}
+%
+% When this package was conceived, \LaTeX\ support for fonts with italic
+% small-caps or \emph{swash capitals} was limited and choosing such a font
+% shape was only possible using the low-level command \cs{fontshape}. This
+% package simplified access to such shapes by introducing new commands like
+% \cs{swshape} and making combinations like \cs{itshape}\cs{scshape} work.
+% With \LaTeX\ release 2020-02-02, that functionality was integrated
+% into the kernel \cite{ltnews31}, so this package has lost its
+% main \emph{raison d'être}.
+% However, switching between different \emph{figure versions} is still
+% a hassle with \LaTeX's font selection scheme \cite{nfss}, so all commands
+% defined by \pkg{fontaxes} that deal with figure versions (e.g.\ \cs{lnfigures}
+% and \cs{tbfigures}) have been incorporated into a new package called
+% \pkg{figureversions}\footnote{\url{https://ctan.org/pkg/figureversions}},
+% released in April 2025.
+%
+% For backwards compatibility and for ensuring a smooth transition, the
+% \pkg{fontaxes} package has also been rewritten and is now a thin wrapper
+% around the \pkg{figureversions} package, providing additional commands like
+% \cs{fontprimaryshape}, which have been used in documents and (font) packages
+% in the wild.
+%
+% \section{Migration to \pkg{figureversions}}
+%
+% As a document author, if you have explicitly loaded \pkg{fontaxes}, you can
+% almost surely just replace |\usepackage{fontaxes}| by
+% |\usepackage{figureversions}|. Only if you have used \cs{fontprimaryshape}
+% or \cs{fontsecondaryshape} in your document, you need to replace that by the
+% standard \LaTeX\ command \cs{fontshape}.
+%
+% As a font package author, you might have used the command
+% \cs{fa@naming@exception} to define a new figure version like so:
+% \begin{quote}
+%   |\fa@naming@exception{figures}{|\marg{figurestyle}|{proportional}}|\marg{suffix1} \\
+%   |\fa@naming@exception{figures}{|\marg{figurestyle}|{tabular}}|\marg{suffix2}
+% \end{quote}
+% With the \pkg{figureversions} package, you can replace both commands with a
+% a single call to |\figureversions_new_figurestyle:nnn|. Since this is a
+% \LaTeX3 command, you need to enter \LaTeX3 mode though:
+% \begin{quote}
+%   |\ExplSyntaxOn| \\
+%   |\figureversions_new_figurestyle:nnn|\ \marg{figurestyle}\ \marg{suffix1}
+%     \ \marg{suffix2} \\
+%   |\ExplSyntaxOff|
+% \end{quote}
+% Note that there is no equivalent for other calls to |\fa@naming@exceptions|,
+% which have no effect in this version of \pkg{fontaxes} anyway.
+%
+% \StopEventually{
+% \begin{thebibliography}{9}
+%
+% \bibitem{ltnews31}
+% \LaTeX\ News. Issue 31, February 2020.
+% \url{https://www.latex-project.org/news/latex2e-news/ltnews31.pdf}
+%
+% \bibitem{nfss}
+% \LaTeX\ Project Team:
+% \LaTeXe\ font selection.
+% \url{https://www.latex-project.org/help/documentation/fntguide.pdf}
+%
+% \end{thebibliography}
+% }
+%
+% \section{Implementation}
+% \AddToHook{sffamily}{\fontfigurealignment{tabular}}
+%
+%    \begin{macrocode}
+%<*package>
+\NeedsTeXFormat{LaTeX2e}[2018-04-01]
+\DeclareRelease{v1}{2011-09-20}{fontaxes-v1.sty}
+\DeclareCurrentRelease{v2}{2025-04-21}
+\ProvidesPackage{fontaxes}[2026-01-02 v2.0.2 Font selection axes (deprecated)]
+%    \end{macrocode}
+% First, we check whether the \pkg{figureversions} package exists. We cannot use
+% \cs{IfFileExists} here since we need to execute code with \cs{ExplSyntaxOn}
+% in the positive case, but this does not work inside arguments of
+% \cs{IfFileExists}. Hence, we simply switch \cs{ExplSyntaxOn} immediately, and
+% use the corresponding \LaTeX3 conditional.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\file_if_exist:nTF { figureversions.sty }
+  {
+%    \end{macrocode}
+% For the \pkg{figureversions} package to work, we need \LaTeX\ format
+% 2024-11-01; we can use the |\IncludeInRelease| macro to execute code
+% conditionally on the format version.
+%    \begin{macrocode}
+    \IncludeInRelease { 2024-11-01 } { fontaxes }
+      { Use~figureversions~if~present }
+    \RequirePackage { figureversions }
+    \msg_new:nnn { fontaxes } { unsupported-axis }
+      { Axis~`#1`~not~supported~for~command~\fa@naming@exception~\msg_line_context: }
+    \msg_new:nnn { fontaxes } { unsupported-alignment }
+      { Value~`#1'~not~supported~as~figure~alignment~\msg_line_context: }
+    \cs_generate_variant:Nn
+      \__figureversions_new_figurestyle_proportional:nn { V }
+    \cs_generate_variant:Nn
+      \__figureversions_new_figurestyle_tabular:nn { V }
+    \cs_new_eq:NN \fontprimaryshape \fontshape
+    \cs_new_eq:NN \fontsecondaryshape \fontshape
+    \cs_new_protected:Npn \fa@naming@exception #1#2#3
+      {
+        \str_if_eq:nnTF {#1} {figures}
+          {
+            \str_set:Ne \l_tmpa_str { \tl_head:n { #2 } }
+            \str_set:Ne \l_tmpb_str { \tl_item:nn { #2 } { 2 } }
+            \str_if_eq:VnTF \l_tmpb_str { proportional }
+              {
+                \__figureversions_new_figurestyle_proportional:Vn
+                  \l_tmpa_str { #3 }
+              }
+              {
+                \str_if_eq:VnTF \l_tmpb_str { tabular }
+                {
+                  \__figureversions_new_figurestyle_tabular:Vn
+                    \l_tmpa_str { #3 }
+                }
+                {
+                  \msg_warning:nnV { fontaxes } { unsupported-alignment }
+                    \l_tmpb_str
+                }
+              }
+          }
+          { \msg_warning:nnn { fontaxes } { unsupported-axis } { #1 } }
+      }
+    \EndIncludeInRelease
+  }
+  {}
+\ExplSyntaxOff
+%    \end{macrocode}
+% For older releases of \LaTeX or if \pkg{figureversions} does not exist, we
+% simply fall back to version~1.
+%    \begin{macrocode}
+\IncludeInRelease{0000-00-00}{fontaxes}{Fall back to v1}
+\InputIfFileExists{fontaxes-v1.sty}{}{%
+  \PackageError{fontaxes}{Failed~to~find~file~`fontaxes-v1.sty'}%
+    {Your~installation~seems~broken.~Try~reinstalling~the~package.}%
+}
+\EndIncludeInRelease
+%</package>
+%    \end{macrocode}
+% \RemoveFromHook{sffamily}
+% \Finale

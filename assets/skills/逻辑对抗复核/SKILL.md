@@ -1,8 +1,8 @@
 ---
 name: 逻辑对抗复核
-description: "数学建模竞赛·逻辑对抗复核。在编程实现后、论文撰写前，用独立视角挑'方向反/重复计量/外推过硬/漏变量/跨问矛盾'这类自查看不见的硬错。Use between 编程实现 and comp-paper."
+description: "数学建模竞赛·逻辑对抗复核。在图表生成完成后、论文撰写前，用独立视角挑'方向反/重复计量/外推过硬/漏变量/跨问矛盾'这类硬错，并修复真实上游产物后重跑验证。Use after figures and before comp-paper."
 argument-hint: [problem-context]
-allowed-tools: Bash(*), Read, Grep, Glob, Agent
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent
 ---
 
 # 竞赛·逻辑对抗复核（独立视角，专挑自查盲区）
@@ -11,19 +11,20 @@ allowed-tools: Bash(*), Read, Grep, Glob, Agent
 
 ## ⚡ 开关说明 + FAST_MODE 二级保险（开头先跑）
 
-⛔ **本步默认「关」**：后端 `_resolve_template` 默认把 逻辑对抗复核 从步骤链里移除，**只有用户显式 `enable_comp_review=true` 时本步才会出现并执行**（这才是真省额度——不出现在链里就不启动进程）。所以你现在能读到这段，说明用户已选择开启。
+本步默认开启；`enable_comp_review=false` 或 `validation_mode=fast` 时，新工作区不包含本步。旧工作区可能仍保留此步骤，后端会将其记为 `skipped`，不代表已完成全量复核。
 
 ```bash
-# 二级保险：即便被开启，FAST_MODE 下仍跳过（速度优先场景），产占位不阻塞。
+# 旧工作区二级保险：只记录真实跳过，不生成全零裁定，不宣称上游检查已通过。
 if grep -q 'MMW_FAST_MODE=1' CLAUDE.md 2>/dev/null; then
-  echo "⏭ FAST_MODE：逻辑对抗复核跳过。确定性闸(logic_audit/cross_problem_check)已在 编程实现 兜底。"
-  printf '# 逻辑对抗复核\n\nFAST_MODE 跳过（省额度）。确定性逻辑闸仍在 编程实现 阶段跑过。\n' > COMP_REVIEW.md
+  echo "FAST_MODE：逻辑对抗复核跳过；由 modeling_finish 记录 skipped。"
+  printf '# 逻辑对抗复核\n\nvalidation_mode=fast：本步骤跳过，未执行独立全量复核。上游确定性检查的状态以各自报告为准。由 modeling_finish 记录 skipped。\n' >> COMP_REVIEW.md
   exit 0
 fi
 ```
-> ⛔ 本步是**唯一多花一次 AI 调用**的环节。默认关(后端移除)、开启后 FAST_MODE 仍可跳。跳过时确定性闸(logic_audit/cross_problem_check)已在上一步兜底，不影响主流程。
 
-## 输入（只读摘要，禁整读大 JSON）
+跳过分支到此结束：不得继续 Step 1–5，不写 `COMP_REVIEW_VERDICT.json`，不清零或覆盖既有发现、计数和修复证据。主代理通过 `modeling_finish` 记录 `skipped`。
+
+## 输入（先读摘要，禁整读大 JSON；修复权限与重跑要求见 Step 4）
 
 - `PROBLEM_ANALYSIS.md`（题面/逐句表/硬约束）、`DATA_FACTS.json`（数据事实台账）
 - `MODELING_REPORT.md`（假设/`LOGIC_CONTRACT_MACHINE`/`CROSS_PROBLEM_LEDGER`）

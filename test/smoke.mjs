@@ -14,6 +14,7 @@ import { buildStepPrompt } from '../lib/prompt.js';
 import { buildClaudeMd, buildEnvSkill } from '../lib/claudeMd.js';
 import { runGates, gatePaperDataCheck, gatePages, gatePdfPages, gateFigures, gateCompanions, parseFigureManifest } from '../lib/gates.js';
 import { readState, writeState, nextPendingStep } from '../lib/state.js';
+import { paperDataInputs } from '../lib/paperDataSnapshot.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from '../lib/questions.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -187,13 +188,17 @@ async function main() {
 
   await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECKLIST.md'), '# 清单\n', 'utf8');
   await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_REPORT.md'), '# 报告\n\n## 结论\n\n通过：论文里的数据性数字都能在 JSON 找到来源。\n', 'utf8');
+  const oldReports = await gatePaperDataCheck(pdcWs, {});
+  check('旧 Markdown 报告没有本次输入凭据不能放行', !oldReports.ok && /PAPER_DATA_CHECK_RESULT/.test(oldReports.hint));
+  await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_RESULT.json'), JSON.stringify({ version: 1, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(pdcWs) }));
   const noMarker = await gatePaperDataCheck(pdcWs, {});
   check('报告通过但缺标记 → 闸门失败', !noMarker.ok && /DATA_CHECK_PASSED/.test(noMarker.hint), noMarker.hint);
 
   await mkdir(path.join(pdcWs, 'paper'), { recursive: true });
   await writeFile(path.join(pdcWs, 'paper', 'main.tex'), '% DATA_CHECK_PASSED\n', 'utf8');
+  await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_RESULT.json'), JSON.stringify({ version: 1, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(pdcWs) }));
   const okGate = await gatePaperDataCheck(pdcWs, {});
-  check('报告通过 + 标记在位 → 闸门通过', okGate.ok, JSON.stringify(okGate.detail));
+  check('报告通过 + 标记及当前输入哈希在位 → 闸门通过', okGate.ok, JSON.stringify(okGate.detail));
 
   await writeFile(path.join(pdcWs, '.mmw', 'state.json'), JSON.stringify({ switches: { validation_mode: 'fast' } }), 'utf8');
   const fastGate = await gatePaperDataCheck(pdcWs, {});
@@ -229,12 +234,14 @@ async function main() {
   await writeFile(path.join(pagesWs, 'paper', 'sections', '5_problem1.tex'), '正文内容'.repeat(1150), 'utf8');
   await writeFile(path.join(pagesWs, 'paper', 'sections', 'A_code.tex'), '\\appendix\n附录代码'.repeat(20000), 'utf8');
   await writeFile(path.join(pagesWs, 'paper', 'sections', 'Z_ai_disclosure.tex'), 'AI 声明'.repeat(2000), 'utf8');
+  await writeFile(path.join(pagesWs, 'paper', 'main.tex'), '\\begin{document}\n\\input{sections/5_problem1}\n\\input{sections/A_code}\n\\input{sections/Z_ai_disclosure}\n\\end{document}\n');
   const pg1 = await gatePages(pagesWs, {});
   check('正文页数只算正文（附录/代码/声明不计）',
     pg1.ok === false && pg1.detail.chars < 6000 && pg1.detail.skippedNonBody.length >= 2,
     JSON.stringify({ chars: pg1.detail.chars, skipped: pg1.detail.skippedNonBody, pages: pg1.detail.estPages }));
 
   await writeFile(path.join(pagesWs, 'paper', 'sections', '6_problem2.tex'), '正文内容'.repeat(1150), 'utf8');
+  await writeFile(path.join(pagesWs, 'paper', 'main.tex'), '\\begin{document}\n\\input{sections/5_problem1}\n\\input{sections/6_problem2}\n\\input{sections/A_code}\n\\input{sections/Z_ai_disclosure}\n\\end{document}\n');
   const pg2 = await gatePages(pagesWs, {});
   check('正文补齐后通过且口径写进 detail', pg2.ok === true && pg2.detail.scope === 'body-pages',
     JSON.stringify({ pages: pg2.detail.estPages, target: pg2.detail.target }));
@@ -246,10 +253,11 @@ async function main() {
   await writeFile(path.join(enPagesWs, '.mmw', 'state.json'), JSON.stringify({ switches: { max_pages: 10, language: 'en' } }), 'utf8');
   await writeFile(path.join(enPagesWs, 'paper', 'sections', '1_intro.tex'), 'A'.repeat(22000), 'utf8');
   await writeFile(path.join(enPagesWs, 'paper', 'sections', 'current_chapter.tex'), 'B'.repeat(8000), 'utf8');
+  await writeFile(path.join(enPagesWs, 'paper', 'main.tex'), '\\begin{document}\n\\input{sections/1_intro}\n\\input{sections/current_chapter}\n\\end{document}\n');
   const enPg = await gatePages(enPagesWs, {});
   check('英文按 2200 字符/页估算且排除临时章节',
     enPg.ok === true && enPg.detail.charsPerPage === 2200 && enPg.detail.chars === 22000
-      && enPg.detail.skippedNonBody.includes('current_chapter.tex'),
+      && enPg.detail.skippedNonBody.includes('paper/sections/current_chapter.tex'),
     JSON.stringify({ chars: enPg.detail.chars, pages: enPg.detail.estPages, skipped: enPg.detail.skippedNonBody }));
   // 11) 图表风格 → 技能映射
   const natureSkills = resolveSteps({ ...switches, figure_style: 'nature' }).map((s) => s.skill);

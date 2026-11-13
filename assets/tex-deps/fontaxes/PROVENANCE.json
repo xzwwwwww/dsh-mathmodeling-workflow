@@ -1,0 +1,23 @@
+{
+  "name": "fontaxes",
+  "version": "2.0.2",
+  "author": "Andreas Buehmann; Michael Ummels",
+  "license": "LPPL-1.3c-or-later",
+  "upstream": "https://ctan.org/pkg/fontaxes",
+  "archive_url": "https://mirrors.tuna.tsinghua.edu.cn/CTAN/macros/latex/contrib/fontaxes.zip",
+  "archive_sha256": "cfc0002e831b5c19d321ee8a95e4a2c95d3c17d2dcec866e4d7a0326701a6250",
+  "runtime_files": [
+    "fontaxes.sty",
+    "fontaxes-v1.sty"
+  ],
+  "modifications": "None; fontaxes.sty generated from upstream fontaxes.ins with docstrip.",
+  "files": {
+    "fontaxes-v1.sty": "66c883309c07614b72e6d39bc8c33004d7c6f777af3bb6ac91aa880325083d2d",
+    "fontaxes.dtx": "0126f59f228862a039963f85868a2cbcc6ce02195f07bd3ca0dca8c124c043b0",
+    "fontaxes.ins": "86b07b855ee066cd03b9e0cbd97531b4509c6ac3f39fd1fa2221d9013a38a0f2",
+    "fontaxes.pdf": "db6987bd4de78e22cee56462615898e69da5b72f251a683ca61999547929fa7e",
+    "fontaxes.sty": "e7e932af3be7aa76ff9774ed2d9aba523f7a851fc25ddde24e21df88c203253b",
+    "lppl-1.3c.txt": "c1ae6e179a6d28bbd5c483fbacc744acc75e922d598281dc3390aab26126e163",
+    "README.md": "415a3838381733438337e221c0b2ae8255307ec7d9b01ac4b0d343b45ba889f7"
+  }
+}

@@ -848,7 +848,7 @@ done
 
 ⛔ 所有图必须有 `keepaspectratio`。
 **⛔⛔ caption 长度铁律（防「流程图名字太长」）**：caption 只写图的类别/主题，≤ 20 个汉字（英文 ≤ 12 词），如「求解流程图」「整体技术路线图」「系统架构图」。禁止把整段方法描述、模型名罗列、步骤枚举塞进 caption。详细说明写进正文。
-**⛔⛔ 尺寸铁律（防「流程图占太大」）**：竖向长条流程图按 width 缩放后自然高度常超一页，`keepaspectratio` 下 height 上限会反成实际尺寸→图撑满整页。上表 height 上限已一律压到 ≤ 0.7\textheight，**禁止回调到 0.8/0.85**。更根本的解法在布局：**流程图优先横向（左→右）或泳道/网格布局，不要画成纯竖向长条**；竖向仅在强上下依赖（如迭代循环）时才用，并把并列分支横向摊开压低总高。目标出图宽高比接近 4:3~16:9，不要接近或超过 1:1.5 的瘦高比。
+**⛔⛔ 尺寸铁律（防「流程图占太大」）**：竖向长条流程图按 width 缩放后自然高度常超一页，`keepaspectratio` 下 height 上限会反成实际尺寸→图撑满整页。上表仅是初值；最终以 `fig_include_size.py` 生成的按比例宽度和 0.80 textheight 限高为准，不得为统一宽度放大竖图。更根本的解法在布局：**流程图优先横向（左→右）或泳道/网格布局，不要画成纯竖向长条**；竖向仅在强上下依赖（如迭代循环）时才用，并把并列分支横向摊开压低总高。目标出图宽高比接近 4:3~16:9，不要接近或超过 1:1.5 的瘦高比。
 
 **⛔ Captions must match paper language.**
 
@@ -887,6 +887,12 @@ TikZ 编译产出 `figures/tikz_diagrams.pdf`（如果分多个 .tex 则是 `fig
 \includegraphics[width=0.85\textwidth,height=0.85\textheight,keepaspectratio]{figures/tikz_diagrams_2.pdf}
 \caption{速度传递与刚体杆约束求解流程}\label{fig:tikz_algo}
 \end{figure}
+```
+
+**追加所有 DrawIO/TikZ include 块后，必须统一按真实长宽比生成最终尺寸**（上表与示例均为初值；下游只复制规整后的权威参数）：
+```bash
+$PYTHON _utils/fig_include_size.py --figdir figures --latex figures/latex_includes.tex
+# 高/宽 ≤0.8 / ≤1.2 / ≤1.6 / >1.6 → 宽 0.85 / 0.70 / 0.50 / 0.42 textwidth；限高 0.80 textheight。
 ```
 
 **⛔ 追加后自检：**

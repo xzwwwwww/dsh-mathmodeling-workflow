@@ -1,0 +1,18 @@
+{
+  "name": "mweights",
+  "version": "2020-01-23",
+  "author": "Bob Tennent",
+  "license": "LPPL",
+  "upstream": "https://ctan.org/pkg/mweights",
+  "archive_url": "https://mirrors.tuna.tsinghua.edu.cn/CTAN/macros/latex/contrib/mweights.zip",
+  "archive_sha256": "635a099afeb4d8db63d073fd4d06c0a6cefcdb90cc2379a5e7211cf4cab7e831",
+  "runtime_files": [
+    "mweights.sty"
+  ],
+  "modifications": "None; original upstream archive contents.",
+  "files": {
+    "lppl-1.3c.txt": "c1ae6e179a6d28bbd5c483fbacc744acc75e922d598281dc3390aab26126e163",
+    "mweights.sty": "174cf004438bb6872d670d4971206ccda329a8c7e8939720fae80de545d90cf3",
+    "README": "145284a9e0c13e2fbe38ea40d461adfb7ad686236341d5e266ad62a6941685ca"
+  }
+}

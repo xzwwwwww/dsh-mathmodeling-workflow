@@ -223,7 +223,7 @@ Follow interleaving and embedding rules from `_utils/writing_rules.md`.
 - Absolutely no consecutive `\begin{figure}...\end{figure}` environments with no prose paragraph between them; if two figures must appear back-to-back, write a transition paragraph explaining their logical relationship
 - **⛔ Logic diagrams (flowchart / architecture / roadmap / pipeline / framework / TikZ geometry·algorithm·architecture sketches) must occupy their own `figure` — never place two side-by-side.** They rely on legible node text and connectors; shrinking to half text-width makes them illegible, and they are not same-axes trend comparisons so side-by-side yields no information gain. Even two related flowcharts go in separate figures with a transition paragraph between. (Data-result figures may still be combined via a single matplotlib-composed PDF, per the width rule below.)
 - **🟡 Not every data figure should be paired — single-column by default, whitespace is the trigger**: data-result figures default to one-per-row; only pair two into a 2-panel when they are **same-kind/comparable** (e.g. two variables' distributions, same-kind curves for two scenarios) **and** each alone would fill only half a page, leaving over half a page of whitespace after its text. Unrelated figures stay single-column even if sparse — never pair just to fill the page (see `_utils/writing_rules.md` rule 4, decision step 3.5).
-- Use `\includegraphics[width=0.85\textwidth,keepaspectratio]` (width-driven, let height auto-scale). ⛔ Do NOT add a small `height=0.38\textheight` cap — with `keepaspectratio`, a height cap can only **shrink** the figure: near-square or tall figures (heatmaps, radar charts, forest plots, confusion matrices, stacked subplots, flowcharts) get clamped to ~half text-width and look tiny. Only add `height=0.9\textheight` as an overflow guard when a single figure is genuinely near a full page tall
+- Copy each figure's dimensions from `figures/latex_includes.tex`, including data figures. For newly generated figures, register them there and run `_utils/fig_include_size.py`: height/width buckets ≤0.8 / ≤1.2 / ≤1.6 / >1.6 use widths 0.85 / 0.70 / 0.50 / 0.42 of textwidth, with height ≤0.80 textheight and keepaspectratio. Tall figures are intentionally narrower; do not impose a universal 0.85 width or shrink dimensions to meet a page target.
 
 ### Step 2.5: Pre-fetch verified reference pool
 
@@ -434,7 +434,18 @@ echo "AI_DISC=$AI_DISC"
 ### Step 5: Final verification
 
 ```bash
-bash _utils/writing_check.sh paper/ 2>/dev/null || bash skills/shared-scripts/writing_check.sh paper/
+WC_SCRIPT=""
+for candidate in _utils/writing_check.sh skills/shared-scripts/writing_check.sh; do
+    if [ -f "$candidate" ]; then WC_SCRIPT="$candidate"; break; fi
+done
+if [ -n "$WC_SCRIPT" ]; then
+    bash "$WC_SCRIPT" paper/
+    WC_EXIT=$?
+else
+    echo "FAIL: writing_check.sh not found"
+    WC_EXIT=127
+fi
+# WC_EXIT != 0 blocks finalization; fallback is only for a missing script.
 ```
 
 **⛔ Capability-claim gate (full-chain contract, run before AND after writing; zero-cost, both modes):** The paper must not claim capabilities that failed acceptance in the coding stage.

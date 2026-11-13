@@ -10,12 +10,12 @@ import { scaffoldWorkspace, readSkillBody, syncTemplates, refreshBundledChecks }
 import { buildStepPrompt } from './lib/prompt.js';
 import { runGates } from './lib/gates.js';
 import { workspaceFlowStyle } from './lib/flowPlan.js';
-import { readState, writeState, nextPendingStep, progressOf } from './lib/state.js';
+import { readState, writeState, nextPendingStep, progressOf, isSettledStep } from './lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/questions.js';
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.5.1';
+const BUILD = '0.5.3';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -30,7 +30,7 @@ const PROTOCOL = `## 数学建模竞赛工作流（mathmodeling-workflow 插件�
 4. **子代理要提问时**：子代理自己会调 \`modeling_ask\`（或结束时告诉你它卡在哪），你收到后调 \`modeling_pending\` 取问题 → 用 \`ask_user_question\` 问用户 → 拿到回答后调 \`modeling_answer\` 记录 → 再 \`send_message\` 把「用户回答：…」发回同一个子代理让它继续，最后才 \`modeling_finish\`。不要替用户编答案。
 5. 验收失败时：把 hints 追加进下一次派发（继续用同一子代理的 send_message，或新建子代理并引用同一 prompt 文件 + hints），最多重试 2 次；仍失败就向用户汇报卡点。
 6. 每次只派一个子代理，不要并行；主会话不要自己写建模/代码/论文内容，只做调度与验收。逻辑对抗复核（comp-review）默认开启，排在**图表之后、论文之前**（它要复核图表并触发重画，必须等图齐了再跑）；除非用户明确要求省钱才传 enable_comp_review: false。
-7. 全部步骤 completed 后调 \`modeling_status\` 汇报产物路径与最终 PDF。`;
+7. 全部步骤已结束（completed 或明确 skipped）后调 \`modeling_status\` 汇报产物路径与最终 PDF；fast 模式不派发逻辑对抗复核，跳过不能表述为已复核通过。`;
 
 function toolOutput(name, renderKey) {
   return {
@@ -96,8 +96,25 @@ function stepView(step, state) {
 }
 
 function progressLines(state) {
-  const marks = { pending: '·', running: '▶', waiting: '⏸', blocked: '!', completed: '✓' };
+  const marks = { pending: '·', running: '▶', waiting: '⏸', blocked: '!', completed: '✓', skipped: '↷' };
   return state.steps.map((s, i) => `${String(i + 1).padStart(2, '0')} ${marks[s.status] ?? '?'} ${s.title}（${s.key}）→ ${s.primaryOutput}`).join('\n');
+}
+
+function isFastReview(state, step) {
+  return step?.key === 'comp-review' && state.switches.validation_mode === 'fast';
+}
+
+function markFastReviewSkipped(state, step) {
+  step.status = 'skipped';
+  step.finishedAt = new Date().toISOString();
+  step.skipReason = 'validation_mode=fast：未执行逻辑对抗复核';
+  step.lastGate = { at: step.finishedAt, ok: true, skipped: true, reason: step.skipReason, results: [] };
+  // 旧工作区可能在 fast 复核中提过问；略过该步后明确归档，不阻塞后续步骤。
+  for (const question of openQuestions(state, step.key)) {
+    question.status = 'cancelled';
+    question.cancelReason = step.skipReason;
+  }
+  state.updatedAt = step.finishedAt;
 }
 
 export function apply(ctx, config = {}) {
@@ -289,7 +306,15 @@ export function apply(ctx, config = {}) {
       const workspace = resolvePath(base, String(args.workspace));
       const state = await requireState(workspace);
 
-      const step = nextPendingStep(state);
+      let step = nextPendingStep(state);
+      const skipped = [];
+      // 旧工作区已经落盘的步骤不重新排序；fast 复核明确跳过，绝不伪造清零裁定。
+      while (isFastReview(state, step)) {
+        markFastReviewSkipped(state, step);
+        skipped.push(step.title);
+        await writeState(workspace, state);
+        step = nextPendingStep(state);
+      }
       if (!step) {
         const { done, total } = progressOf(state);
         return { report: `所有步骤已完成（${done}/${total}）。调 modeling_status 查看产物。`, done: true };
@@ -336,6 +361,7 @@ export function apply(ctx, config = {}) {
         `能靠合理假设推进的，就在产物里写清假设继续。不要越过本步去写后续产物。完成后按 prompt 末尾的交付格式回复。`;
 
       const report = [
+        ...(skipped.length ? [`快速模式已跳过：${skipped.join('、')}（未执行复核）`] : []),
         `第 ${index + 1}/${state.steps.length} 步：${step.title}（${step.key}）`,
         `prompt 文件：${promptPath}`,
         `工作目录：${workspace}`,
@@ -388,14 +414,33 @@ export function apply(ctx, config = {}) {
         if (key) throw new Error(`工作区里没有步骤 ${key}；可用：${state.steps.map((s) => s.key).join(', ')}`);
         return { report: '没有可验收的步骤（全部已完成）。', pass: true, done: true, next: null };
       }
-      if (step.status === 'completed') {
+      if (isSettledStep(step)) {
         const after = nextPendingStep(state);
         return {
-          report: `第 ${step.order + 1} 步「${step.title}」已经验收通过，无需重复验收。${after ? `下一步：${after.title}（${after.key}）→ 调 modeling_next` : '全部步骤已完成 → 调 modeling_status 汇报。'}`,
+          report: `第 ${step.order + 1} 步「${step.title}」${step.status === 'skipped' ? '已按快速模式跳过，未执行复核' : '已经验收通过，无需重复验收'}。${after ? `下一步：${after.title}（${after.key}）→ 调 modeling_next` : '全部步骤已结束 → 调 modeling_status 汇报。'}`,
+          skipped: step.status === 'skipped',
           pass: true,
           done: !after,
           next: after ? { step: after.key, title: after.title, promptPath: after.promptPath } : null,
         };
+      }
+
+      const current = nextPendingStep(state);
+      if (step !== current) {
+        throw new Error(`不能越过前序步骤验收 ${step.key}；当前步骤是 ${current?.key ?? '无'}，请先完成当前步骤`);
+      }
+      if (isFastReview(state, step)) {
+        markFastReviewSkipped(state, step);
+        await writeState(workspace, state);
+        const after = nextPendingStep(state);
+        return {
+          report: `快速模式：${step.title} 已跳过（未执行复核，不生成清零裁定）。${after ? `下一步：${after.title} → 调 modeling_next` : '全部步骤已结束'}`,
+          pass: true, skipped: true, done: !after,
+          next: after ? { step: after.key, title: after.title, promptPath: after.promptPath } : null,
+        };
+      }
+      if (!['running', 'blocked', 'waiting'].includes(step.status)) {
+        throw new Error(`步骤 ${step.key} 尚未派发；请先调 modeling_next 获取本步规格并执行，再验收`);
       }
 
       // 子代理提交了问题还没回答：先走「问用户 → 回答 → 回传」的闭环，不要越过它验产物
@@ -483,6 +528,10 @@ export function apply(ctx, config = {}) {
         ? state.steps.find((s) => s.key === String(args.step))
         : nextPendingStep(state);
       if (!step) throw new Error('没有执行中的步骤，无法登记问题');
+      if (step !== nextPendingStep(state) || !['running', 'waiting', 'blocked'].includes(step.status)) {
+        throw new Error('只能为当前已派发的步骤登记问题，请先调 modeling_next');
+      }
+      if (!String(args.question).trim()) throw new Error('问题不能为空');
       const item = addQuestion(state, {
         step: step.key,
         question: String(args.question).trim(),
@@ -554,17 +603,24 @@ export function apply(ctx, config = {}) {
       const workspace = resolvePath(base, String(args.workspace));
       const state = await requireState(workspace);
       const open = openQuestions(state);
+      if (!args.question_id && open.length > 1) {
+        throw new Error(`有 ${open.length} 个待答问题，必须指定 question_id：${open.map((q) => q.id).join('、')}`);
+      }
       const id = args.question_id ? String(args.question_id) : open[0]?.id;
       if (!id) throw new Error('没有待回答的问题');
+      if (!String(args.answer ?? '').trim()) throw new Error('回答不能为空；跳过问题不等于已作答');
       const item = answerQuestion(state, id, args.answer);
       if (!item) throw new Error(`问题 ${id} 不存在或已回答`);
       const step = state.steps.find((s) => s.key === item.step);
-      if (step && step.status === 'waiting') step.status = 'running';
+      const remaining = step ? openQuestions(state, step.key) : [];
+      if (step && step.status === 'waiting' && !remaining.length) step.status = 'running';
       state.updatedAt = new Date().toISOString();
       await writeState(workspace, state);
       const relay =
         `用户对问题「${item.question}」的回答：${item.answer}\n` +
-        `请据此继续第 ${(step?.order ?? 0) + 1} 步（${step?.title ?? item.step}），不要重复提问。`;
+        (remaining.length
+          ? `本步骤还有 ${remaining.length} 个待答问题，请等主代理收齐回答后继续；不要重复登记已有问题。`
+          : `请据此继续第 ${(step?.order ?? 0) + 1} 步（${step?.title ?? item.step}），不要重复提问。`);
       return { report: `已记录回答，把下面这段 send_message 给子代理：\n---\n${relay}\n---`, relay, question_id: id, step: item.step };
     },
   });
@@ -654,6 +710,10 @@ export function apply(ctx, config = {}) {
       // 语言/赛项变了：模板包要跟着换（否则 en→zh 时 _templates 里没有 cumcm 等中文模板）
       if (state.switches.language !== switches.language || state.switches.competition !== switches.competition) {
         await syncTemplates({ workspaceDir: workspace, assetsDir: ASSETS_DIR, switches });
+      }
+      if (Object.hasOwn(args.switches ?? {}, 'title')) {
+        state.title = switches.title || state.title;
+        switches.title = state.title;
       }
       const claudeMd = buildClaudeMd({ switches, steps, title: state.title, uploaded: state.inputFiles });
       await writeFile(path.join(workspace, 'CLAUDE.md'), claudeMd, 'utf8');

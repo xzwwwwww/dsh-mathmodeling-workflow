@@ -1,6 +1,9 @@
 {
   "name": "@local/dsh-mathmodeling-workflow",
-  "version": "0.5.1",
+  "version": "0.5.3",
+  "scripts": {
+    "test": "node test/run.mjs"
+  },
   "private": true,
   "type": "module",
   "description": "数学建模竞赛全流程工作流（DSH 插件）：赛题目录 → 8 步流水线（分析·建模·编程·图表·流程图·逻辑复核·论文·编译）→ 完整 LaTeX 论文 PDF",
@@ -42,6 +45,9 @@
     "locale/*.json",
     "icon.png",
     "CHANGELOG.md",
+    "FIXES-0.5.2.md",
+    "TEX-DEPENDENCIES.md",
+    "docs/validation-v0.5.3.md",
     "assets/**/*"
   ],
   "dsh": {

@@ -9,6 +9,14 @@
 赛题目录/ ──► 8 步流水线 ──► paper/main.pdf + 全部源码/图表/中间产物
 ```
 
+## v0.5.3 内置 TeX 离线依赖
+
+随包提供 xpatch，以及实编译所需的 xstring、scalefnt、mweights、fontaxes 支持宏包。新模板自动携带，已有论文目录在续跑时补齐，保留源码、许可证和自定义文件；MCM/APMCM 的新建与旧工作区路径均已真实编译通过。[依赖清单、授权与复跑说明](TEX-DEPENDENCIES.md)。
+
+## v0.5.2 全流程修复
+
+本版修复状态流转、问答恢复、数据与图表验收、英文编译、图尺寸和编译作业隔离等 23 项问题，保留 AI 声明的内容生成规则。[逐项查看「原问题 → 修复后功能 → 验证结果」](FIXES-0.5.2.md)。开发回归统一执行 `node test/run.mjs`（需 Node、Python 3.10+，Shell 行为测试需 Bash）；实际 TeX 编译另见修复说明。
+
 ## 安装
 
 > **兼容性实测**　插件 v0.5.1 已在 DSH `0.2.2-rc.2` 的 Desktop 后端和 Web profile 中验证。两端都成功注册了 8 个 `modeling_*` 工具并注入工作流提示。使用测试产物验证了提问回传、开关修改、缺文件拦截及全部 8 个步骤的验收。[DSH 版本说明](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.2)
@@ -18,7 +26,7 @@
 | 依赖 | 什么时候需要 |
 |---|---|
 | Python 3.10+（能 `import matplotlib`） | 数据图、结果核对 |
-| XeLaTeX（TeX Live / MiKTeX） | 编译论文 PDF |
+| XeLaTeX / pdflatex（TeX Live / MiKTeX；BibTeX 模板另需 bibtex） | 编译中/英文论文 PDF，具体宏包以所选赛事模板为准 |
 | Chromium 内核浏览器（Edge / Chrome） | 仅 `flowchart_engine=html` 时需要 |
 | 中文字体 | 编译中文模板（初始化时会尝试从系统字体回填） |
 
@@ -153,7 +161,7 @@ agent 会回显类似：
 | 07 | 论文撰写 | 中文：XeLaTeX；英文（MCM/ICM）：COMAP 格式、Summary Sheet、pdflatex；strict 时做数据真实性核对 |
 | 08 | 编译与合规检查 | 中文：XeLaTeX；英文：pdflatex + bibtex；模板完整性、图嵌入、AI 声明合规 |
 
-可调整：`flowchart_engine=html` 会把第 05 步换成 HTML 引擎技能；`skip_figures` 去掉 04+05；`enable_comp_review=false` 去掉 06；`fast` 模式跳过 06 的深度复核和数据核对；`language=en` 会把 07/08 换成英文论文/编译技能。
+可调整：`flowchart_engine=html` 会把第 05 步换成 HTML 引擎技能；`skip_figures` 去掉 04+05；`enable_comp_review=false` 去掉 06；`fast` 模式不派发 06，并跳过严格数字核对（旧工作区已存在的复核步明确记录 skipped，不能称为已复核通过）；`language=en` 会把 07/08 换成英文论文/编译技能。
 
 每一步结束都由**确定性闸门**验收（产物存在、图表对账、正文页数、逻辑合同、AI 声明、数据核对），不通过就带着修复提示重派，最多重试 2 次。
 

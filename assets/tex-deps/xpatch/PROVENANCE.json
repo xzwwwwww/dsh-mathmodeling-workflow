@@ -1,0 +1,22 @@
+{
+  "name": "xpatch",
+  "version": "0.3a",
+  "release_date": "2020-03-25",
+  "author": "Enrico Gregorio",
+  "license": "LPPL-1.3c-or-later",
+  "upstream": "https://ctan.org/pkg/xpatch",
+  "archive_url": "https://mirrors.tuna.tsinghua.edu.cn/CTAN/macros/latex/contrib/xpatch.zip",
+  "archive_sha256": "9c77714f2e50027d0797d1bbd7e7f08a6950d3541ed1e84a067fe226fa84acf0",
+  "license_url": "https://www.latex-project.org/lppl/lppl-1-3c.txt",
+  "runtime_generated_by": "latex --disable-installer -no-shell-escape -interaction=nonstopmode -halt-on-error xpatch.ins",
+  "modifications": "None; xpatch.sty generated with upstream xpatch.ins and docstrip.",
+  "runtime_files": ["xpatch.sty"],
+  "files": {
+    "lppl-1.3c.txt": "c1ae6e179a6d28bbd5c483fbacc744acc75e922d598281dc3390aab26126e163",
+    "README": "40aea4d8a67420ee735eb010d0e33b64f904f0983982cb8c8fcc786afa925c82",
+    "xpatch.dtx": "7624630dbfb6dcbbbfe666442a24020a3ce4d846d528d39b2590448107de7c57",
+    "xpatch.ins": "ef01e4920aae52174daf549fef9073c591f82e04ec90acac5a0b977f0782d3fe",
+    "xpatch.pdf": "3a639f26e46157d89e7f918d869b7dcc476e6243780037d045f923bff86d4a38",
+    "xpatch.sty": "1ef00dcd1657efdcec02398201ca7769054815eda93b1ee40e413d7894b4f17e"
+  }
+}
