@@ -804,17 +804,11 @@ If you skip this step and generate a figure with matplotlib default blue, no gra
 **Copy this EXACTLY as the first lines of every gen_fig_*.py script. Output extension：默认 `.pdf`（LaTeX 模式）；如果 CLAUDE.md 末尾包含「⛔ 输出格式：仅 PNG」（Word/docx 模式）就改成 `.png`：**
 
 ```python
-import os, sys, shutil
-os.makedirs('_utils', exist_ok=True)
-for src in ['plot_utils.py']:
-    for search in ['skills/shared-scripts', '../skills/shared-scripts']:
-        p = os.path.join(search, src)
-        if os.path.isfile(p):
-            shutil.copy2(p, f'_utils/{src}')  # copies .py file, NOT .pdf
-            break
-sys.path.insert(0, '.')  # plain dot, NOT '.pdf'
-from _utils.plot_utils import setup_style, save_fig, PALETTE
-setup_style()  # defaults to Soft palette; alternatives: tableau/npg/nejm/science/colorblind
+import os, sys
+# modeling_next has prepared the compatible runtime. Never overwrite it with parent-directory copies.
+sys.path.insert(0, '.')
+from _utils.plot_utils import setup_style, save_fig, PALETTE, set_paper_placement
+setup_style()  # workspace-seeded default; explicit project palette stays authoritative
 
 # ... figure generation code ...
 # Read data from JSON/CSV, never hardcode numbers
@@ -946,17 +940,14 @@ If violations found (especially CRITICAL), fix and re-check before executing:
 **Execute scripts in PARALLEL for speed, then fix any failures serially. 各 `gen_fig_*.py` 相互独立（one script per figure），可并行跑成功路径提速；失败的再逐个串行诊断修复。**
 
 ⛔ **并行前必须预热两处竞态源**（否则多进程首次并发会翻车，产出内容不受影响，只防崩）：
-1. **预复制 `plot_utils.py`**：每个脚本头都 `shutil.copy2` 复制它到 `_utils/`，多进程同时写同一文件在 Windows 会 `PermissionError`。并行前先复制好一次，把并发写窗口降到最小。
+1. **检查共享绘图 API**：`modeling_next` 已同步兼容的 `_utils/plot_utils.py`。并行前单进程检查所需接口，绘图进程只读该文件；不要再从父目录或旧 shared-scripts 复制覆盖。
 2. **预热 matplotlib 字体缓存**：首次 `import matplotlib.pyplot` 会构建字体缓存，多进程同时首次构建可能损坏缓存。并行前先单进程 import 一次，后续并发只读缓存。
 
 ```bash
 PYTHON=""; for _c in "$MMW_PYTHON" python python3; do [ -z "$_c" ] && continue; if $_c -c "import sys" >/dev/null 2>&1; then PYTHON="$_c"; break; fi; done; [ -z "$PYTHON" ] && PYTHON=python
 
-# ── 预热1：预复制 plot_utils.py（消除并发 copy2 竞态）──
-mkdir -p _utils
-for _s in skills/shared-scripts ../skills/shared-scripts; do
-    [ -f "$_s/plot_utils.py" ] && cp "$_s/plot_utils.py" _utils/plot_utils.py && break
-done
+# ── 预热1：检查本步共享运行时；缺接口应修复依赖，不得绕过 ──
+$PYTHON -c "from _utils.plot_utils import setup_style, save_fig, set_paper_placement, draw_vector_heatmap, dynamic_limits, declutter_axes, uncertainty_band, shared_legend, consolidate_shared_legends" || exit 1
 # ── 预热2：单进程触发字体缓存构建（后续并发只读不重建）──
 $PYTHON -c "import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot" >/dev/null 2>&1
 

@@ -9,7 +9,7 @@ const candidates = [...new Set([process.env.MMW_PYTHON, process.env.PYTHON, bund
 const python = candidates.find((candidate) => spawnSync(candidate, ['-c', 'import sys; assert sys.version_info >= (3, 10)'], { stdio: 'ignore' }).status === 0);
 if (!python) throw new Error('Python 3.10+ is required for helper regressions; set MMW_PYTHON to its executable.');
 const env = { ...process.env, MMW_PYTHON: python, PYTHONDONTWRITEBYTECODE: '1', PYTHONIOENCODING: 'utf-8' };
-const suites = ['smoke.mjs', 'state-regression.mjs', 'gates-regression.mjs', 'skills-regression.mjs', 'tex-dependencies-regression.mjs'];
+const suites = ['smoke.mjs', 'state-regression.mjs', 'gates-regression.mjs', 'skills-regression.mjs', 'tex-dependencies-regression.mjs', 'plot-runtime-regression.mjs'];
 for (const name of suites) {
   console.log(`\nRunning ${name}`);
   const result = spawnSync(process.execPath, [path.join(root, 'test', name)], { cwd: root, env, stdio: 'inherit' });

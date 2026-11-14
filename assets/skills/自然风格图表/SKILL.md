@@ -153,9 +153,14 @@ def finish(fig, path):
 Use the prepared shared runtime, including its save-time checks:
 
 ```python
-from _utils.plot_utils import setup_style, save_fig, set_paper_placement
+from _utils.plot_utils import (
+    setup_style, save_fig, set_paper_placement, draw_vector_heatmap, dynamic_limits,
+    declutter_axes, uncertainty_band, auto_legend, shared_legend, consolidate_shared_legends,
+)
 setup_style(palette='nature')
 ```
+
+`modeling_next` checks the shared API before dispatch, upgrades known original copies, and preserves custom files. Never overwrite the prepared helper from an older parent `shared-scripts` directory. A custom file missing required APIs stops dispatch with a path to the complete bundled replacement for merging.
 
 If the runtime is missing, report the dependency failure; do not replace it with inline rcParams or catch a quality failure and retry via an unguarded exporter.
 

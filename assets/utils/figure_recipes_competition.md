@@ -499,6 +499,8 @@ from matplotlib.colors import Normalize
 # 初始化 _utils
 os.makedirs('_utils', exist_ok=True)
 for src in ['plot_utils.py', 'china_provinces.geojson']:
+    if src == 'plot_utils.py' and os.path.isfile(f'_utils/{src}'):
+        continue  # use the runtime synchronized before step dispatch
     for search in ['skills/shared-scripts', '../skills/shared-scripts']:
         p = os.path.join(search, src)
         if os.path.isfile(p):

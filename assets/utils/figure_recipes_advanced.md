@@ -380,6 +380,8 @@ save_fig(fig, 'figures/fig_bump.pdf')
 import shutil, os
 os.makedirs('_utils', exist_ok=True)
 for f in ['plot_utils.py']:
+    if os.path.isfile(f'_utils/{f}'):
+        continue  # keep the compatible runtime already prepared by the workflow
     src = os.path.join(os.path.dirname(__file__), f)
     if os.path.exists(src):
         shutil.copy2(src, f'_utils/{f}')

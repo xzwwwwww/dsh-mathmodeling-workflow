@@ -1060,6 +1060,8 @@ save_fig(fig, 'figures/fig_multistep_decay.pdf')
 import shutil, os
 os.makedirs('_utils', exist_ok=True)
 for f in ['plot_utils.py', 'china_provinces.geojson']:
+    if f == 'plot_utils.py' and os.path.isfile(f'_utils/{f}'):
+        continue  # do not downgrade the shared runtime
     src = os.path.join(os.path.dirname(__file__), f)
     if os.path.exists(src):
         shutil.copy2(src, f'_utils/{f}')
@@ -1187,6 +1189,8 @@ save_fig(fig, 'figures/fig_moran_scatter.pdf')
 import shutil, os
 os.makedirs('_utils', exist_ok=True)
 for f in ['plot_utils.py', 'china_provinces.geojson']:
+    if f == 'plot_utils.py' and os.path.isfile(f'_utils/{f}'):
+        continue  # do not downgrade the shared runtime
     src = os.path.join(os.path.dirname(__file__), f)
     if os.path.exists(src):
         shutil.copy2(src, f'_utils/{f}')

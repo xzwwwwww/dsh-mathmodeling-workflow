@@ -108,8 +108,9 @@ RANDOM_PALETTE_POOL = [
 ]
 
 # 默认配色（Elegant — 柔和通透，清新淡雅）
-PALETTE = PALETTES['elegant']
-PALETTE_LIGHT = None  # 延迟初始化，在 _lighten 定义后赋值
+# Keep imported list references live across setup_style calls.
+PALETTE = list(PALETTES['elegant'])
+PALETTE_LIGHT = []
 
 COLORS = {
     'primary': '#7AAEC8',     # 淡蓝灰（主色调）
@@ -172,7 +173,8 @@ def _read_palette_marker():
     for p in ('CLAUDE.md', '../CLAUDE.md', '../../CLAUDE.md'):
         try:
             if os.path.isfile(p):
-                txt = open(p, encoding='utf-8', errors='replace').read()
+                with open(p, encoding='utf-8', errors='replace') as marker_file:
+                    txt = marker_file.read()
                 import re as _re
                 m = _re.search(r'MMW_DATA_FIG_PALETTE=([A-Za-z_]+)', txt)
                 if m:
@@ -188,7 +190,8 @@ def _read_custom_colors():
     for p in ('CLAUDE.md', '../CLAUDE.md', '../../CLAUDE.md'):
         try:
             if os.path.isfile(p):
-                txt = open(p, encoding='utf-8', errors='replace').read()
+                with open(p, encoding='utf-8', errors='replace') as marker_file:
+                    txt = marker_file.read()
                 import re as _re
                 m = _re.search(r'MMW_DATA_FIG_COLORS=([#0-9A-Fa-f,]+)', txt)
                 if m:
@@ -207,7 +210,8 @@ def _read_style_marker():
     for p in ('CLAUDE.md', '../CLAUDE.md', '../../CLAUDE.md'):
         try:
             if os.path.isfile(p):
-                txt = open(p, encoding='utf-8', errors='replace').read()
+                with open(p, encoding='utf-8', errors='replace') as marker_file:
+                    txt = marker_file.read()
                 import re as _re
                 m = _re.search(r'MMW_DATA_FIG_STYLE=([A-Za-z_]+)', txt)
                 if m and m.group(1) in STYLE_FAMILIES:
@@ -236,7 +240,8 @@ def _read_style_custom_marker():
     for p in ('CLAUDE.md', '../CLAUDE.md', '../../CLAUDE.md'):
         try:
             if os.path.isfile(p):
-                txt = open(p, encoding='utf-8', errors='replace').read()
+                with open(p, encoding='utf-8', errors='replace') as marker_file:
+                    txt = marker_file.read()
                 import re as _re
                 # 捕获到空白/`>` 前的整段（不用 [A-Za-z] 类，否则遇到脏字符会截断丢掉后面合法档位）；
                 # 每个档位的合法性由下面 _STYLE_CUSTOM_DIMS 白名单逐个过滤，脏值自然被剔除。
@@ -374,33 +379,13 @@ def setup_style(palette='auto'):
     else:
         _knobs = None
 
-    # 选择配色
-    if isinstance(palette, list):
-        colors = palette
-    elif _random_mode:
-        _marker = _read_palette_marker()   # 前端手选:配色名 / 'custom' / 'random' / None
-        _custom = _read_custom_colors() if _marker == 'custom' else None
-        if _custom:
-            colors = list(_custom)         # 用户自定义取色 → 直接用（不轮转，尊重用户排序）
-        elif _marker and _marker in PALETTES and _marker != 'random':
-            _pal_name = _marker            # 用户指定预设 → 配色固定（字体/版式仍按种子随机）
-            colors = list(PALETTES[_pal_name])
-            _rot = (_seed // 3) % len(colors)
-            colors = colors[_rot:] + colors[:_rot]
-        else:
-            _pal_name = RANDOM_PALETTE_POOL[_seed % len(RANDOM_PALETTE_POOL)]  # 种子选一套
-            colors = list(PALETTES[_pal_name])
-            _rot = (_seed // 3) % len(colors)  # 同套配色也按种子轮转主色顺序，进一步去重
-            colors = colors[_rot:] + colors[:_rot]
-    elif palette in PALETTES:
-        colors = PALETTES[palette]
-    else:
-        colors = PALETTES['journal']
+    # Project DATA palette overrides style defaults, including Nature.
+    colors = _select_style_colors(palette, _seed, _random_mode)
 
     # 更新全局 PALETTE 供其他函数使用
     global PALETTE, PALETTE_LIGHT, COLORS
-    PALETTE = colors
-    PALETTE_LIGHT = [_lighten(c, 0.4) for c in colors]
+    PALETTE[:] = colors
+    PALETTE_LIGHT[:] = [_lighten(c, 0.4) for c in colors]
     COLORS['primary'] = colors[0]
     COLORS['secondary'] = colors[1] if len(colors) > 1 else colors[0]
     COLORS['accent'] = colors[2] if len(colors) > 2 else colors[0]
@@ -408,8 +393,11 @@ def setup_style(palette='auto'):
     COLORS['up'] = colors[2] if len(colors) > 2 else '#7BC8A4'       # 上升 = accent 色
     COLORS['down'] = colors[1] if len(colors) > 1 else '#ED7D7D'     # 下降 = secondary 色
     COLORS['highlight'] = colors[4] if len(colors) > 4 else colors[0]  # 高亮
+    COLORS['bg_fill'] = _lighten(colors[0], .65)
+    COLORS['bg_fill2'] = _lighten(colors[1] if len(colors) > 1 else colors[0], .65)
+    COLORS['bg_box'] = _lighten(colors[0], .9)
 
-    # 尝试使用 SciencePlots（如果未安装则自动安装）
+    # Optional installed styles only; plotting must never install packages online.
     # ★ 随机模式【跳过】SciencePlots：它默认 xtick.top/ytick.right + 朝内刻度（=上/右黑点点根源），
     #   且会整体覆盖我们的风格族样式。随机模式下版式完全交给 STYLE_FAMILIES 控制。
     #   非随机（显式指定配色，如 nature）保持原有 SciencePlots 行为，向后兼容。
@@ -419,14 +407,7 @@ def setup_style(palette='auto'):
             import scienceplots
             _has_scienceplots = True
         except ImportError:
-            try:
-                import subprocess
-                subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'SciencePlots', '-q'],
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                import scienceplots
-                _has_scienceplots = True
-            except Exception:
-                pass
+            pass
         if _has_scienceplots:
             try:
                 plt.style.use(['science', 'no-latex'])
@@ -495,17 +476,7 @@ def setup_style(palette='auto'):
             fp = FontProperties(fname=_bundled_font)
             zh_fonts = [fp.get_name()]
             print(f"Using bundled Chinese font: {_bundled_font}")
-        elif platform.system() == 'Linux':
-            # Linux 上尝试自动安装
-            try:
-                import subprocess
-                subprocess.run(['apt-get', 'install', '-y', 'fonts-noto-cjk-extra'],
-                               capture_output=True, timeout=30)
-                fontManager.__init__()
-                available_fonts = {f.name for f in fontManager.ttflist}
-                zh_fonts = [f for f in zh_candidates if f in available_fonts]
-            except Exception:
-                pass
+        # Missing fonts are reported below; do not mutate the host OS during plotting.
         if not zh_fonts:
             print("WARNING: No Chinese fonts found — Chinese text will show as □")
             print("  Fix: place NotoSansSC-Regular.ttf in skills/shared-scripts/")
@@ -589,24 +560,21 @@ def setup_style(palette='auto'):
         if _fc:
             matplotlib.rcParams['axes.facecolor'] = _fc
 
-    # ★ Nature 专属参数覆盖（字号更大、轴线更粗，匹配 Nature 出版标准）
+    # Paper-readable tiers; set_paper_placement adjusts them for actual insertion scale.
     _palette_name = palette if isinstance(palette, str) else None
     if _palette_name in ('nature', 'npg'):
         matplotlib.rcParams.update({
-            'font.size': 16,            # Nature 标准：正文 16pt
-            'axes.labelsize': 16,
-            'axes.titlesize': 18,
-            'axes.linewidth': 2.5,      # Nature 标准：粗轴线
-            'xtick.labelsize': 14,
-            'ytick.labelsize': 14,
-            'legend.fontsize': 13,
-            'lines.linewidth': 2.5,
-            'lines.markersize': 8,
-            'xtick.major.width': 2.0,
-            'ytick.major.width': 2.0,
-            'xtick.major.size': 6,
-            'ytick.major.size': 6,
+            'font.size': 9, 'axes.labelsize': 9.5, 'axes.titlesize': 10,
+            'axes.linewidth': 1.0, 'xtick.labelsize': 8.5, 'ytick.labelsize': 8.5,
+            'legend.fontsize': 8.5, 'lines.linewidth': 1.4, 'lines.markersize': 4.5,
+            'xtick.major.width': 0.8, 'ytick.major.width': 0.8,
+            'xtick.major.size': 3.5, 'ytick.major.size': 3.5,
+            'xtick.direction': 'out', 'ytick.direction': 'out',
+            'xtick.top': False, 'ytick.right': False,
         })
+    for key in ('primary', 'secondary', 'accent', 'up', 'down', 'highlight', 'text'):
+        COLORS[key] = _readable_ink(COLORS[key])
+    matplotlib.rcParams.update({'pdf.fonttype': 42, 'ps.fonttype': 42, 'svg.fonttype': 'none'})
 
     # ★ Hook plt.savefig — 即使不用 save_fig()，也能自动防遮挡
     _hook_savefig(plt)
@@ -622,6 +590,13 @@ def _hook_savefig(plt):
     _original_savefig = matplotlib.figure.Figure.savefig
 
     def _hooked_savefig(self, *args, **kwargs):
+        if hasattr(self, '_mmw_paper_placement') or getattr(self, '_mmw_manual_layout', False):
+            if not hasattr(self, '_mmw_paper_placement'):
+                set_paper_placement(self)
+            if kwargs.get('bbox_inches') == 'tight':
+                raise ValueError('Paper placement requires a fixed canvas; reserve margins instead of bbox_inches=tight')
+            _validate_paper_export(self)
+            return _original_savefig(self, *args, **kwargs)
         # ★ 强制修复子图尺寸（最高优先级，检测到问题必须修复）
         try:
             _guard_subplot_size(self)
@@ -676,7 +651,7 @@ def _lighten(hex_color, amount=0.4):
 
 
 # 初始化 PALETTE_LIGHT（必须在 _lighten 定义之后）
-PALETTE_LIGHT = [_lighten(c, 0.4) for c in PALETTES['soft']]
+PALETTE_LIGHT[:] = [_lighten(c, 0.4) for c in PALETTE]
 
 
 def _pull_back_outside_transaxes_text(fig):
@@ -1026,21 +1001,23 @@ def _save(fig, output):
     PNG 输出强制 350 DPI（与 docx_export PDF→PNG 兜底链路一致），防止 Word 嵌入时中文标签糊。
     PDF/SVG 矢量输出不受 DPI 影响。
     """
-    # ★ 子图尺寸防护：检测子图是否被压缩得过小，如果是则修复
-    _guard_subplot_size(fig)
-    # ★ 无条件拉回 ax.text(transAxes, y<0 or y>1) 反模式（防 bbox=tight mediabox 爆炸）
-    _pull_back_outside_transaxes_text(fig)
-    # ★ 3D 轴不做 tight_layout：matplotlib 官方不支持，会把 3D 曲面挤塌
-    if not _has_3d_axes(fig):
-        try:
-            fig.tight_layout(pad=0.5)
-        except Exception:
-            pass
-    # ★ tight_layout 后再检查一次，防止 tight_layout 把子图压小
-    _guard_subplot_size(fig)
-    # ★ axes 内容占比检测：若所有 axes 占 figure 面积 < 50%，自动收缩 figsize
-    # 防止 "figsize=(10, 12) 但只画了上面 2 个小 panel，下面 8 寸全白" 这种产物
-    _auto_shrink_figsize_if_sparse(fig)
+    engine = fig.get_layout_engine() if hasattr(fig, 'get_layout_engine') else None
+    explicit = (hasattr(fig, '_mmw_paper_placement') or engine is not None
+                or getattr(fig, '_mmw_manual_layout', False))
+    if not explicit:
+        # Retain legacy repair for old recipe canvases only, never rewrite a new GridSpec contract.
+        _guard_subplot_size(fig)
+        _pull_back_outside_transaxes_text(fig)
+        if not _has_3d_axes(fig):
+            try:
+                fig.tight_layout(pad=0.5)
+            except Exception:
+                pass
+        _guard_subplot_size(fig)
+        _auto_shrink_figsize_if_sparse(fig)
+    if not hasattr(fig, '_mmw_paper_placement'):
+        set_paper_placement(fig)
+    _validate_paper_export(fig)
     # ★ 空 / 仅空白 路径直接拒绝（避免兜底成隐藏文件 ".pdf"）
     if not output or not str(output).strip():
         raise ValueError("save_fig: output path is empty")
@@ -1070,6 +1047,9 @@ def _save(fig, output):
     # ★ 成品自检：数据被轴范围裁掉（坐标系约定写错，静态扫不出来），同样实测拦一道
     _warn_if_data_clipped(fig, output)
     fig.savefig(output, **_save_kwargs)
+    if _ext in ('pdf', 'svg', 'eps', 'ps'):
+        preview = os.path.splitext(output)[0] + '.png'
+        fig.savefig(preview, format='png', dpi=300, bbox_inches=None)
     _get_plt().close(fig)
     print(f'Saved: {output}')
 
@@ -1742,8 +1722,11 @@ def _simple_spread(ax, texts, bboxes, renderer):
             except Exception:
                 pass
 
-# 公开别名，供外部脚本调用
-save_fig = _save
+def save_fig(fig, path=None, *, output=None):
+    """Export with paper guards; output= remains a supported legacy keyword."""
+    if path is not None and output is not None:
+        raise ValueError('Pass either path or output, not both')
+    return _save(fig, path if path is not None else output)
 
 
 # ============================================================
@@ -1751,20 +1734,12 @@ save_fig = _save
 # ============================================================
 
 def _ensure_adjustText():
-    """确保 adjustText 库可用，不可用时自动安装。"""
+    """Use an installed optional label solver, never pip-install while rendering."""
     try:
         from adjustText import adjust_text
         return adjust_text
     except ImportError:
-        try:
-            import subprocess
-            subprocess.check_call(
-                [sys.executable, '-m', 'pip', 'install', 'adjustText', '-q'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            from adjustText import adjust_text
-            return adjust_text
-        except Exception:
-            return None
+        return None
 
 
 def smart_labels(ax, xs, ys, texts, colors=None, fontsize=9, fontweight='normal',
@@ -1957,24 +1932,9 @@ def check_legend_overlap(ax, preferred_locs=None):
     return best_loc
 
 
-def auto_legend(ax, **kwargs):
-    """智能图例：自动选择不遮挡数据的位置。
-
-    用法：用 auto_legend(ax) 替代 ax.legend()
-
-    Args:
-        ax: matplotlib Axes 对象
-        **kwargs: 传给 ax.legend() 的其他参数
-    """
-    loc = check_legend_overlap(ax)
-    # ⛔ 默认去框：实证对比 94 张真实竞赛图，带灰框图例是"显土"的主要来源之一
-    #    （高分图去框率 37% vs 平庸图 0%）。收紧 labelspacing/handlelength 让图例更紧凑。
-    #    调用方仍可用 auto_legend(ax, frameon=True) 覆盖。
-    defaults = dict(frameon=False, fontsize=9, labelspacing=0.35, handlelength=1.6,
-                    borderpad=0.3, fancybox=False, shadow=False)
-    defaults.update(kwargs)
-    defaults['loc'] = loc
-    return ax.legend(**defaults)
+def auto_legend(ax, outside=None, where='auto', **kwargs):
+    """Measure safe inside candidates, then reserve a compact outside lane if needed."""
+    return _place_auto_legend(ax, outside=outside, where=where, **kwargs)
 
 
 # ============================================================
@@ -2446,13 +2406,16 @@ def nature_palette(seed=None):
 
     locked = False
     try:
-        palette_name = _read_palette_marker()
-        custom = _read_custom_colors()
-        locked = bool(custom) or bool(palette_name and palette_name not in ("nature", "auto"))
+        locked = _project_palette() is not None
     except Exception:
         locked = False
 
     if locked:
+        selected = _project_palette()
+        if selected:
+            return {key: (_lighten(selected[i % len(selected)], .55) if key in _NATURE_FILL
+                          else _readable_ink(selected[i % len(selected)]))
+                    for i, key in enumerate(PALETTE_NATURE)}
         return dict(PALETTE_NATURE)
 
     if seed is None:
@@ -2481,3 +2444,503 @@ def nature_markers(seed=None):
     rotated = base[:]
     rng.shuffle(rotated)
     return tuple(rotated)
+
+
+# Shared runtime contract used by the shipped prompts (self-contained when copied).
+PLOT_UTILS_API_VERSION = 1
+
+
+def _project_palette():
+    marker = _read_palette_marker()
+    custom = _read_custom_colors()
+    if custom and marker in (None, 'custom'):
+        return custom
+    if marker in ('gray', 'grey', 'grayscale', 'greyscale', 'mono', 'black_white'):
+        return ['#252525', '#636363', '#969696', '#BDBDBD', '#D9D9D9']
+    if marker in PALETTES and marker not in ('nature', 'npg'):
+        return list(PALETTES[marker])
+    return None
+
+
+def _select_style_colors(palette, seed, random_mode):
+    from matplotlib.colors import to_hex
+    locked = _project_palette()
+    if locked:
+        chosen = locked
+    elif isinstance(palette, (list, tuple)):
+        chosen = list(palette)
+    elif random_mode:
+        name = _read_palette_marker()
+        name = name if name in PALETTES else RANDOM_PALETTE_POOL[seed % len(RANDOM_PALETTE_POOL)]
+        chosen = list(PALETTES[name])
+        rotation = (seed // 3) % len(chosen)
+        chosen = chosen[rotation:] + chosen[:rotation]
+    elif palette == 'nature':
+        semantic = nature_palette()
+        chosen = [semantic[k] for k in ('blue_main', 'blue_secondary', 'green_3', 'red_strong', 'neutral_mid', 'teal', 'violet', 'gold')]
+    else:
+        chosen = list(PALETTES.get(palette, PALETTES['journal']))
+    if not chosen:
+        raise ValueError('setup_style requires at least one color')
+    return [to_hex(c) for c in chosen]
+
+
+def _readable_ink(color):
+    from matplotlib.colors import to_hex, to_rgb
+    rgb = np.array(to_rgb(color), dtype=float)
+    for _ in range(40):
+        candidate = to_hex(rgb)
+        if _contrast_on_white(candidate) >= 3.2:
+            return candidate
+        rgb *= .92
+    return to_hex(rgb)
+
+
+def set_paper_placement(fig, width_fraction=None, *, textwidth_in=6.5,
+                        height_fraction=0.80, textheight_in=9.7, min_font_pt=8.25):
+    """Record intended insertion constraints; return a copy of that contract.
+
+    None uses the source width, capped at the template width (no assumed enlargement).
+    Fonts are checked at the smaller of the final width/height scales on export.
+    """
+    values = {'textwidth_in': textwidth_in, 'height_fraction': height_fraction,
+              'textheight_in': textheight_in, 'min_font_pt': min_font_pt}
+    if any(not np.isfinite(v) or v <= 0 for v in values.values()):
+        raise ValueError('paper dimensions, fractions and font size must be finite and positive')
+    if height_fraction > 1 or min_font_pt < 8:
+        raise ValueError('height_fraction must be <= 1 and final min_font_pt must be >= 8')
+    if width_fraction is not None and (not np.isfinite(width_fraction) or not 0 < width_fraction <= 1):
+        raise ValueError('width_fraction must be in (0, 1] or None')
+    values['width_fraction'] = width_fraction
+    fig._mmw_paper_placement = values
+    _prepare_paper_fonts(fig)
+    return dict(values)
+
+
+def _paper_scale(fig):
+    p = fig._mmw_paper_placement
+    width, height = fig.get_size_inches()
+    if not np.isfinite([width, height]).all() or min(width, height) <= 0:
+        raise ValueError('figure size must be finite and positive')
+    fraction = p['width_fraction']
+    final_width = min(width, p['textwidth_in']) if fraction is None else fraction * p['textwidth_in']
+    return min(final_width / width, p['height_fraction'] * p['textheight_in'] / height)
+
+
+def _prepare_paper_fonts(fig):
+    from matplotlib.text import Text
+    if not hasattr(fig, '_mmw_paper_placement'):
+        return
+    # Draw to materialize ticks, then update their fonts without moving GridSpec cells.
+    for _ in range(3):
+        fig.canvas.draw()
+        minimum = fig._mmw_paper_placement['min_font_pt'] / _paper_scale(fig)
+        changed = False
+        for item in fig.findobj(match=Text):
+            if item.get_visible() and item.get_text() and item.get_fontsize() + 1e-6 < minimum:
+                item.set_fontsize(minimum)
+                changed = True
+        if not changed:
+            break
+    fig.canvas.draw()
+
+
+def _validate_paper_export(fig):
+    from matplotlib.text import Text
+    _prepare_paper_fonts(fig)
+    renderer = fig.canvas.get_renderer()
+    bounds = fig.bbox
+    outside = []
+    # Matplotlib retains Text for out-of-view ticks and for axis-off legend cells;
+    # those objects are not drawn and must not trigger a false clipping failure.
+    undrawn = set()
+    for ax in fig.axes:
+        for axis in (ax.xaxis, ax.yaxis):
+            ticks = axis.get_major_ticks() + axis.get_minor_ticks()
+            drawn = set(axis._update_ticks()) if ax.axison and ax.get_visible() and axis.get_visible() else set()
+            for tick in ticks:
+                if tick not in drawn:
+                    undrawn.update((tick.label1, tick.label2))
+    for item in fig.findobj(match=Text):
+        if item in undrawn:
+            continue
+        if not item.get_visible() or not item.get_text():
+            continue
+        if item.get_clip_on() and (item.get_clip_box() is not None or item.get_clip_path() is not None):
+            continue
+        box = item.get_window_extent(renderer)
+        if box.width and box.height and (box.x0 < bounds.x0 - 2 or box.y0 < bounds.y0 - 2
+                                         or box.x1 > bounds.x1 + 2 or box.y1 > bounds.y1 + 2):
+            outside.append(item.get_text()[:40])
+    if outside:
+        raise ValueError('Text outside the figure; reserve layout space before export: ' + ', '.join(outside[:5]))
+
+
+def dynamic_limits(ax, *, x=None, y=None, pad=0.06, include_zero=False):
+    """Apply finite data limits without hiding uncertainty endpoints or inverting axes."""
+    if not np.isfinite(pad) or pad < 0:
+        raise ValueError('pad must be finite and nonnegative')
+    result = {}
+    for name, values in [('x', x), ('y', y)]:
+        if values is None:
+            continue
+        data = np.ma.asarray(values, dtype=float).compressed()
+        data = data[np.isfinite(data)]
+        scale = getattr(ax, 'get_' + name + 'scale')()
+        if scale == 'log':
+            data = data[data > 0]
+        if not data.size:
+            continue  # all missing does not create fictional zero data
+        low, high = float(data.min()), float(data.max())
+        if include_zero and scale != 'log':
+            low, high = min(low, 0.), max(high, 0.)
+        if scale == 'log':
+            a, b = np.log10([low, high])
+            delta = (b - a) * pad if b > a else max(pad, .05)
+            limits = tuple(10. ** np.array([a - delta, b + delta]))
+        else:
+            delta = (high - low) * pad if high > low else max(abs(low) * max(pad, .01), .05)
+            limits = (low - delta, high + delta)
+            if include_zero and low == 0:
+                limits = (0., limits[1])
+            if include_zero and high == 0:
+                limits = (limits[0], 0.)
+            if limits[0] == limits[1]:
+                limits = (-.05, .05)
+        getter, setter = getattr(ax, 'get_' + name + 'lim'), getattr(ax, 'set_' + name + 'lim')
+        if getter()[0] > getter()[1]:
+            limits = limits[::-1]
+        setter(*limits)
+        result[name] = limits
+    return result
+
+
+def declutter_axes(ax, *, grid='auto', grid_axis='y'):
+    if grid not in ('auto', True, False, None) or grid_axis not in ('x', 'y', 'both'):
+        raise ValueError('grid must be auto/bool/None; grid_axis must be x/y/both')
+    for side in ('top', 'right'):
+        ax.spines[side].set_visible(False)
+    for side in ('left', 'bottom'):
+        ax.spines[side].set_visible(True)
+    ax.tick_params(direction='out', top=False, right=False)
+    ax.grid(False, which='both')
+    use_grid = grid is True or (grid == 'auto' and not ax.images and not any(
+        type(c).__name__ == 'QuadMesh' for c in ax.collections))
+    if use_grid:
+        ax.grid(True, axis=grid_axis, color=COLORS['grid'], linewidth=.5, alpha=.35)
+        ax.set_axisbelow(True)
+    from matplotlib.ticker import LogLocator
+    for name in ('x', 'y'):
+        if getattr(ax, 'get_' + name + 'scale')() == 'log':
+            getattr(ax, name + 'axis').set_minor_locator(LogLocator(subs=(2, 5)))
+    return ax
+
+
+def uncertainty_band(ax, x, lower, upper, *, color=None, alpha=0.14, **kwargs):
+    """Draw supplied uncertainty, never estimate or fabricate an interval."""
+    arrays = [np.ma.asarray(a, dtype=float) for a in (x, lower, upper)]
+    if any(a.ndim != 1 for a in arrays) or not (arrays[0].shape == arrays[1].shape == arrays[2].shape):
+        raise ValueError('x, lower and upper must be aligned 1D arrays')
+    if not np.isfinite(alpha) or not 0 <= alpha <= 1:
+        raise ValueError('alpha must be in [0, 1]')
+    values = [a.filled(np.nan) for a in arrays]
+    finite = np.isfinite(values[0]) & np.isfinite(values[1]) & np.isfinite(values[2])
+    if np.any(values[1][finite] > values[2][finite]):
+        raise ValueError('lower uncertainty bound exceeds upper')
+    where = np.asarray(kwargs.pop('where', np.ones(arrays[0].shape, dtype=bool)), dtype=bool)
+    if where.shape != arrays[0].shape:
+        raise ValueError('where must align with x')
+    return ax.fill_between(*values, where=where & finite, color=PALETTE[0] if color is None else color, alpha=alpha, **kwargs)
+
+
+def _cell_text_color(rgba, background):
+    from matplotlib.colors import to_rgba
+    front, back = np.array(to_rgba(rgba)), np.array(to_rgba(background))
+    # Axes can themselves be translucent: composite both on the white paper.
+    back_rgb = back[:3] * back[3] + 1 - back[3]
+    rgb = front[:3] * front[3] + back_rgb * (1 - front[3])
+    linear = np.where(rgb <= .04045, rgb / 12.92, ((rgb + .055) / 1.055) ** 2.4)
+    luminance = float(linear @ np.array([.2126, .7152, .0722]))
+    return 'black' if (luminance + .05) / .05 >= 1.05 / (luminance + .05) else 'white'
+
+
+def draw_vector_heatmap(ax, data, *, xlabels=None, ylabels=None, mask=None, annot='auto',
+                        annot_limit=48, fmt='.2f', cmap='coolwarm', vmin=None, vmax=None,
+                        center=None, square=False, origin='upper', cbar=True,
+                        cbar_label=None, cax=None, cell_linewidth=0.35):
+    """Draw a non-rasterized QuadMesh, preserving masks and missing values."""
+    from matplotlib.colors import Normalize, TwoSlopeNorm
+    from matplotlib import colormaps
+    matrix = np.ma.asarray(data, dtype=float)
+    if matrix.ndim != 2 or 0 in matrix.shape:
+        raise ValueError('heatmap data must be a non-empty 2D matrix')
+    missing = np.ma.getmaskarray(matrix) | ~np.isfinite(matrix.filled(np.nan))
+    if mask is not None:
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape != matrix.shape:
+            raise ValueError('mask shape must match heatmap data')
+        missing |= mask
+    matrix = np.ma.array(matrix.data, mask=missing)
+    rows, cols = matrix.shape
+    if xlabels is not None and len(xlabels) != cols or ylabels is not None and len(ylabels) != rows:
+        raise ValueError('heatmap labels must match matrix dimensions')
+    if origin not in ('upper', 'lower'):
+        raise ValueError('origin must be upper or lower')
+    if not isinstance(annot, (bool, np.bool_)) and annot not in ('auto', None):
+        raise ValueError('annot must be auto, bool or None')
+    if annot_limit < 0 or not np.isfinite(cell_linewidth) or cell_linewidth < 0:
+        raise ValueError('annotation limit and cell linewidth must be nonnegative')
+    finite = matrix.compressed()
+    low = float(vmin) if vmin is not None else float(finite.min()) if finite.size else 0.
+    high = float(vmax) if vmax is not None else float(finite.max()) if finite.size else 1.
+    if not np.isfinite([low, high]).all() or low > high:
+        raise ValueError('heatmap vmin/vmax must be finite and ordered')
+    if low == high:
+        delta = max(abs(low) * .01, .5)
+        low, high = low - delta, high + delta
+    if center is not None:
+        if not np.isfinite(center):
+            raise ValueError('center must be finite')
+        if vmin is None:
+            low = min(low, center - max(abs(high - center) * .01, .01))
+        if vmax is None:
+            high = max(high, center + max(abs(center - low) * .01, .01))
+        if not low < center < high:
+            raise ValueError('center must lie strictly between vmin and vmax')
+        norm = TwoSlopeNorm(vcenter=center, vmin=low, vmax=high)
+    else:
+        norm = Normalize(vmin=low, vmax=high)
+    color_map = colormaps.get_cmap(cmap).copy()
+    color_map.set_bad((0, 0, 0, 0))
+    ax.grid(False)
+    mesh = ax.pcolormesh(np.arange(cols + 1), np.arange(rows + 1), matrix, norm=norm,
+                         cmap=color_map, edgecolors='white', linewidth=cell_linewidth,
+                         shading='flat', rasterized=False)
+    ax.set_xlim(0, cols)
+    ax.set_ylim((rows, 0) if origin == 'upper' else (0, rows))
+    ax.set_aspect('equal' if square else 'auto')
+    ax.set_xticks(np.arange(cols) + .5, labels=list(xlabels) if xlabels is not None else np.arange(cols))
+    ax.set_yticks(np.arange(rows) + .5, labels=list(ylabels) if ylabels is not None else np.arange(rows))
+    show = bool(annot) if annot != 'auto' else matrix.size <= annot_limit
+    if show:
+        for r, c in zip(*np.where(~missing)):
+            value = matrix.data[r, c]
+            ax.text(c + .5, r + .5, format(value, fmt), ha='center', va='center',
+                    color=_cell_text_color(mesh.to_rgba(value), ax.get_facecolor()))
+    bar = ax.figure.colorbar(mesh, ax=ax, cax=cax) if cbar else None
+    if bar is not None and cbar_label:
+        bar.set_label(cbar_label)
+    return mesh, bar
+
+
+def _legend_overlaps(ax, legend):
+    """Check actual display paths/patches/markers and annotations, not quadrant counts."""
+    from matplotlib.collections import PathCollection
+    from matplotlib.transforms import Bbox
+    fig = ax.figure
+    fig.canvas.draw()
+    box = legend.get_window_extent(fig.canvas.get_renderer()).padded(2)
+    bounds = fig.bbox
+    if box.x0 < bounds.x0 or box.y0 < bounds.y0 or box.x1 > bounds.x1 or box.y1 > bounds.y1:
+        return True
+    for line in ax.lines:
+        if line.get_visible() and line.get_path().transformed(line.get_transform()).intersects_bbox(box, filled=False):
+            return True
+    for patch in ax.patches:
+        if patch.get_visible() and patch.get_path().transformed(patch.get_transform()).intersects_bbox(box):
+            return True
+    for collection in ax.collections:
+        if not collection.get_visible():
+            continue
+        if isinstance(collection, PathCollection):
+            points = collection.get_offset_transform().transform(collection.get_offsets())
+            sizes = collection.get_sizes()
+            radius = np.sqrt(np.max(sizes)) * fig.dpi / 144 if len(sizes) else 2
+            for x, y in np.ma.asarray(points).filled(np.nan):
+                if np.isfinite([x, y]).all() and Bbox.from_extents(x-radius, y-radius, x+radius, y+radius).overlaps(box):
+                    return True
+        else:
+            for p in collection.get_paths():
+                if p.transformed(collection.get_transform()).intersects_bbox(box):
+                    return True
+    renderer = fig.canvas.get_renderer()
+    for text in list(ax.texts) + [ax.title, ax._left_title, ax._right_title] + list(fig.texts):
+        if text.get_visible() and text.get_text() and text.get_window_extent(renderer).overlaps(box):
+            return True
+    return False
+
+
+def _legend_defaults(fig, options):
+    defaults = dict(frameon=False, labelspacing=.35, handlelength=1.6, borderpad=.3,
+                    fancybox=False, shadow=False)
+    defaults.update(options)
+    if not hasattr(fig, '_mmw_paper_placement'):
+        set_paper_placement(fig)
+    from matplotlib.font_manager import FontProperties
+    minimum = fig._mmw_paper_placement['min_font_pt'] / _paper_scale(fig)
+    size = FontProperties(size=defaults.get('fontsize', _get_plt().rcParams['legend.fontsize'])).get_size_in_points()
+    defaults['fontsize'] = max(size, minimum)
+    return defaults
+
+
+def _figure_legend(fig, handles, labels, *, where='auto', ncol=None, title=None, **kwargs):
+    """Allocate a measured top/right lane without overwriting a data GridSpec cell."""
+    if where not in ('auto', 'top', 'right'):
+        raise ValueError('legend where must be auto/top/right')
+    defaults = _legend_defaults(fig, kwargs)
+    defaults.pop('bbox_to_anchor', None)
+    defaults.pop('loc', None)
+    columns = defaults.pop('ncols', defaults.pop('ncol', ncol))
+    if columns is not None and (not isinstance(columns, int) or columns < 1):
+        raise ValueError('legend ncol must be a positive integer')
+    candidates = []
+    for side in (('top', 'right') if where == 'auto' else (where,)):
+        trial_columns = [columns] if columns else (list(range(1, len(labels)+1)) if side == 'top' else [1])
+        for cols in trial_columns:
+            legend = fig.legend(handles, labels, loc='upper center' if side == 'top' else 'center right',
+                                ncol=cols, title=title, **defaults)
+            _prepare_paper_fonts(fig)
+            box = legend.get_window_extent(fig.canvas.get_renderer())
+            width, height = box.width / fig.bbox.width, box.height / fig.bbox.height
+            legend.remove()
+            if width <= .96 and height <= .96:
+                cost = height if side == 'top' else width
+                if cost < .45:
+                    candidates.append((cost, side, cols, width, height))
+    if not candidates:
+        raise ValueError('Legend does not fit; use a dedicated GridSpec legend cell or split related panels')
+    _, side, columns, width, height = min(candidates, key=lambda x: x[0])
+    pad = .02
+    anchor = (.5, .99) if side == 'top' else (.99, .5)
+    legend = fig.legend(handles, labels, loc='upper center' if side == 'top' else 'center right',
+                        bbox_to_anchor=anchor, ncol=columns, title=title, **defaults)
+    manual = getattr(fig, '_mmw_manual_layout', False)
+    if not manual:
+        engine = fig.get_layout_engine() if hasattr(fig, 'get_layout_engine') else None
+        constrained = engine is not None and 'Constrained' in type(engine).__name__
+        if constrained and 'rect' in engine.get() and hasattr(engine, 'set'):
+            base = getattr(fig, '_mmw_legend_base_rect', engine.get()['rect'])
+            fig._mmw_legend_base_rect = base
+            x, y, w, h = base
+            rect = (x, y, w, h-height-pad) if side == 'top' else (x, y, w-width-pad, h)
+            if min(rect[2:]) <= .15:
+                legend.remove()
+                raise ValueError('Legend lane leaves insufficient plotting area')
+            engine.set(rect=rect)
+        else:
+            if engine is not None:
+                fig.set_layout_engine(None)  # freeze a prior tight layout before reserving the measured lane
+            base = getattr(fig, '_mmw_legend_base_positions', [(ax, ax.get_position().frozen()) for ax in fig.axes])
+            fig._mmw_legend_base_positions = base
+            for ax, pos in base:
+                if side == 'top':
+                    ax.set_position([pos.x0, pos.y0 * (1-height-pad), pos.width, pos.height * (1-height-pad)])
+                else:
+                    ax.set_position([pos.x0 * (1-width-pad), pos.y0, pos.width * (1-width-pad), pos.height])
+    fig._mmw_legend_layout = True
+    fig.canvas.draw()
+    box = legend.get_window_extent(fig.canvas.get_renderer()).padded(1)
+    # Manual layout is never rewritten; fail if no reserved space actually exists.
+    data_axes = [ax for ax in fig.axes if ax.get_visible() and ax.axison]
+    if any(box.overlaps(ax.get_window_extent()) for ax in data_axes):
+        legend.remove()
+        raise ValueError('Outside legend overlaps a panel; reserve a dedicated legend row/column')
+    for other in fig.legends:
+        if other is not legend and other.get_visible() and box.overlaps(other.get_window_extent(fig.canvas.get_renderer())):
+            legend.remove()
+            raise ValueError('Outside legends overlap; consolidate identical series or use dedicated cells')
+    return legend
+
+
+def _place_auto_legend(ax, outside=None, where='auto', **kwargs):
+    if outside not in (None, True, False, 'top', 'right'):
+        raise ValueError('outside must be None/bool/top/right')
+    if where not in ('auto', 'top', 'right'):
+        raise ValueError('where must be auto/top/right')
+    handles = kwargs.pop('handles', None)
+    labels = kwargs.pop('labels', None)
+    found_h, found_l = ax.get_legend_handles_labels()
+    handles = found_h if handles is None else list(handles)
+    labels = found_l if labels is None else list(labels)
+    if not handles or len(handles) != len(labels):
+        return None
+    fig = ax.figure
+    original = ax.get_legend()
+    if outside in (None, False) and not kwargs and original is not None and not _legend_overlaps(ax, original):
+        return original  # large safe legends are not moved solely because of their area
+    defaults = _legend_defaults(fig, kwargs)
+    preference = defaults.pop('loc', None)
+    if outside in (None, False):
+        locations = [preference] if preference is not None else []
+        locations += ['upper right', 'upper left', 'lower right', 'lower left', 'center right', 'center left', 'upper center', 'lower center', 'center']
+        for location in locations:
+            candidate = ax.legend(handles, labels, loc=location, **defaults)
+            fig.canvas.draw()
+            if not _legend_overlaps(ax, candidate):
+                return candidate
+            candidate.remove()
+        if outside is False:
+            if original is not None:
+                ax.add_artist(original)
+                ax.legend_ = original
+            raise ValueError('No clear inside legend location; reserve a legend cell or allow outside placement')
+    side = outside if isinstance(outside, str) else where
+    legend = _figure_legend(fig, handles, labels, where=side, **defaults)
+    if original is not None:
+        try:
+            original.remove()
+        except ValueError:
+            pass
+    return legend
+
+
+def _series_signature(handle):
+    if hasattr(handle, 'patches') and len(handle.patches):
+        handle = handle.patches[0]
+    elif hasattr(handle, 'lines') and not hasattr(handle, 'get_color'):
+        handle = next((part for part in handle.lines if part is not None and hasattr(part, 'get_color')), handle)
+    result = [type(handle).__name__]
+    for attr in ('get_color', 'get_facecolor', 'get_edgecolor', 'get_linestyle', 'get_marker', 'get_alpha'):
+        if hasattr(handle, attr):
+            result.append((attr, repr(getattr(handle, attr)())))
+    return tuple(result)
+
+
+def _shared_series(fig, axes):
+    axes = list(fig.axes if axes is None else np.asarray(axes, dtype=object).ravel())
+    groups = []
+    for ax in axes:
+        if ax.figure is not fig:
+            raise ValueError('shared legend axes must belong to the given figure')
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            if len(set(labels)) != len(labels):
+                raise ValueError('Duplicate series labels need explicit disambiguation before consolidation')
+            groups.append((ax, handles, labels, dict(zip(labels, map(_series_signature, handles)))))
+    if groups and any(group[3] != groups[0][3] for group in groups[1:]):
+        raise ValueError('Only identical semantic series/styles can share a legend')
+    return groups
+
+
+def shared_legend(fig, axes=None, *, where='auto', ncol=None, title=None, **kwargs):
+    groups = _shared_series(fig, axes)
+    if not groups:
+        return None
+    legend = _figure_legend(fig, groups[0][1], groups[0][2], where=where, ncol=ncol, title=title, **kwargs)
+    for ax, *_ in groups:
+        old = ax.get_legend()
+        if old is not None:
+            old.remove()
+    return legend
+
+
+def consolidate_shared_legends(fig, axes, *, where='auto', min_series=2, **kwargs):
+    if not isinstance(min_series, int) or min_series < 1:
+        raise ValueError('min_series must be a positive integer')
+    try:
+        groups = _shared_series(fig, axes)
+    except ValueError:
+        return None  # leave the original distinct legends untouched
+    if len(groups) < 2 or len(groups[0][2]) < min_series:
+        return None
+    return shared_legend(fig, [g[0] for g in groups], where=where, **kwargs)

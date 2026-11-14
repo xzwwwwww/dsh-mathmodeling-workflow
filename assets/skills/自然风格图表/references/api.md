@@ -4,6 +4,8 @@ Use the shipped `_utils.plot_utils` module, not invented inline wrappers.
 Call `setup_style(palette='nature')` once before creating figures; this installs the same
 save-time layout/contrast guards used by the default style. `save_fig` alone does not initialize styling.
 
+The v0.5.4 bundled runtime declares `PLOT_UTILS_API_VERSION = 1`. Workflow dispatch checks the exports below and upgrades known original workspace copies before serving this prompt. Keep the prepared file; do not replace it with an older parent-directory helper.
+
 ## Core exports
 
 - `PALETTE`: mutable **list** of selected series colors, not a semantic-key dictionary.

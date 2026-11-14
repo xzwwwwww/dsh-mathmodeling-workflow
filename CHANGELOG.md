@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.4
+
+- 补齐提示词已经要求、旧 plot_utils 却缺失的完整共享 API：set_paper_placement、dynamic_limits、draw_vector_heatmap、declutter_axes、uncertainty_band、shared_legend、consolidate_shared_legends；auto_legend 支持测量后的图内/图外布局。
+- 固定导入后的 PALETTE/PALETTE_LIGHT 引用，Nature 保留显式项目色卡；矢量热力图保留缺失/掩码值并按实际背景选择黑白字，保存时按最终插入尺寸检查字号并生成 PNG 预览，不重排已声明的 GridSpec/手工布局。
+- 新建工作区校验运行时；续跑时按原版指纹升级 plot_utils.py、补齐缺失文件。未知定制版本保留原稿，缺 API 时暂停派发并提供完整新版供合并，禁止把新提示词发给不兼容的旧工具。
+- 默认图表样板及配方不再覆盖已准备好的共享工具；绘图阶段不再在线安装 SciencePlots、adjustText 或系统字体。
+- 新增运行时迁移回归及真实 Agg 绘图测试，直接执行四个随包 Nature 教程并验证 PDF/PNG 输出。详见 [绘图运行时修复说明](docs/plot-runtime-v0.5.4.md)。
+
 ## 2026-11-14：DSH 0.2.2-rc.3 兼容性验证（插件仍为 0.5.3）
 
 - 对照官方 rc.2/rc.3 tags，25 个插件相关 API、Cordis、Loader、Include 与管理接口源码/manifest 的 SHA-256 相同；无需业务代码适配。

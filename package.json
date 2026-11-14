@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-mathmodeling-workflow",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "scripts": {
     "test": "node test/run.mjs"
   },
@@ -48,6 +48,7 @@
     "FIXES-0.5.2.md",
     "TEX-DEPENDENCIES.md",
     "docs/validation-v0.5.3.md",
+    "docs/plot-runtime-v0.5.4.md",
     "docs/compatibility/**/*",
     "assets/**/*"
   ],
