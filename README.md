@@ -19,7 +19,9 @@
 
 ## 安装
 
-> **兼容性实测**　插件 v0.5.1 已在 DSH `0.2.2-rc.2` 的 Desktop 后端和 Web profile 中验证。两端都成功注册了 8 个 `modeling_*` 工具并注入工作流提示。使用测试产物验证了提问回传、开关修改、缺文件拦截及全部 8 个步骤的验收。[DSH 版本说明](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.2)
+> **rc.3 兼容性实测（2026-11-14）**　插件 v0.5.3 已通过 DSH `0.2.2-rc.3` 的隔离真实 Host 集成：16 组检查、50 次原生工具管线调用，严格模式 8 步产物验收全部完成；提示注入、会话工作目录、问答恢复、fast 跳过和卸载重挂载均通过，无需修改业务代码。本次不是 Desktop/Web GUI 端到端测试。[验证范围、结果与复跑方法](docs/compatibility/dsh-0.2.2-rc.3.md) · [DSH rc.3 发布说明](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.3)
+>
+> 历史记录：插件 v0.5.1 曾在 DSH `0.2.2-rc.2` 的 Desktop 后端和 Web profile 验证通过。
 
 其余依赖按需装，缺哪个只影响对应那一步：
 
@@ -32,7 +34,7 @@
 
 ### 桌面版安装
 
-先启动一次 DSH Desktop 以初始化 `desktop` profile，然后完全退出应用。使用 Desktop 安装目录下的内置命令 `resources/runtime/cli/bin/dsh`（Windows 为 `dsh.cmd`）执行下列命令。如果终端中的 `dsh` 指向其他安装，请把命令开头的 `dsh` 换成内置命令的完整路径。安装完成后重新打开 Desktop。[桌面版内置命令说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.2/apps/desktop/README.zh.md#bundled-command-runtime)
+先启动一次 DSH Desktop 以初始化 `desktop` profile，然后完全退出应用。使用 Desktop 安装目录下的内置命令 `resources/runtime/cli/bin/dsh`（Windows 为 `dsh.cmd`）执行下列命令。如果终端中的 `dsh` 指向其他安装，请把命令开头的 `dsh` 换成内置命令的完整路径。安装完成后重新打开 Desktop。[桌面版内置命令说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.3/apps/desktop/README.zh.md#bundled-command-runtime)
 
 ```bash
 dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmodeling-workflow
@@ -43,7 +45,7 @@ dsh plugin --profile desktop add github:xzwwwwww/dsh-mathmodeling-workflow
 准备 Node.js 24.9.0 或更高版本，并确保终端可以运行 `pnpm`（可用 `npm install -g pnpm` 安装）。以下命令将插件安装到 `web` profile。
 
 ```bash
-npx -y @deepseek-ai/dsh@0.2.2-rc.2 plugin --profile web add github:xzwwwwww/dsh-mathmodeling-workflow
+npx -y @deepseek-ai/dsh@0.2.2-rc.3 plugin --profile web add github:xzwwwwww/dsh-mathmodeling-workflow
 ```
 
 ### 从本地目录安装

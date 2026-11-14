@@ -1,0 +1,290 @@
+{
+  "checkedAt": "2026-11-14",
+  "pluginVersion": "0.5.3",
+  "pluginCommit": "ed864c764a66cd5ef7bf6e229d830749078d2d25",
+  "expectedDshVersion": "0.2.2-rc.3",
+  "node": "v24.21.0",
+  "versions": {
+    "@deepseek-ai/dsh": "0.2.2-rc.3",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-working-directory": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session-projection": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-fs": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-fs-local": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-scope": "0.2.2-rc.3"
+  },
+  "mounted": [
+    {
+      "name": "@deepseek-ai/dsh-system-prompt",
+      "state": 2
+    },
+    {
+      "name": "@deepseek-ai/dsh-tools",
+      "state": 2
+    },
+    {
+      "name": "@deepseek-ai/dsh-session",
+      "state": 2
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-projection",
+      "state": 2
+    },
+    {
+      "name": "@deepseek-ai/dsh-fs-local",
+      "state": 2
+    },
+    {
+      "name": "@deepseek-ai/dsh-working-directory",
+      "state": 2
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-executor-native",
+      "state": 2
+    }
+  ],
+  "pass": true,
+  "checks": [
+    {
+      "name": "exact public runtime versions",
+      "pass": true
+    },
+    {
+      "name": "all eight definitions register in real ToolsService",
+      "pass": true
+    },
+    {
+      "name": "prompt injection and real Session working-directory context",
+      "pass": true
+    },
+    {
+      "name": "working-directory set/ensure uses filesystem and Session projection",
+      "pass": true
+    },
+    {
+      "name": "native pipeline returns plugin business errors and unknown-name failures",
+      "pass": true
+    },
+    {
+      "name": "registered init scaffolds relative to real Session cwd; pre-start switches propagate",
+      "pass": true
+    },
+    {
+      "name": "question pending/ambiguous/empty/partial/full answers and resumed prompt",
+      "pass": true
+    },
+    {
+      "name": "missing artifact and conflicting logic block; repaired analysis passes",
+      "pass": true
+    },
+    {
+      "name": "modeling and code gates require actual companion artifacts",
+      "pass": true
+    },
+    {
+      "name": "data figure reconciliation and HTML source plus PDF gate",
+      "pass": true
+    },
+    {
+      "name": "strict adversarial verdict blocks unresolved findings and accepts zero fixture",
+      "pass": true
+    },
+    {
+      "name": "strict paper pages/disclosure gates and real Python input-hash freshness",
+      "pass": true
+    },
+    {
+      "name": "all eight strict steps complete; invalid PDF blocks; real PDF page tree passes",
+      "pass": true
+    },
+    {
+      "name": "new fast omits review; legacy waiting review skips and cancels questions without verdict",
+      "pass": true
+    },
+    {
+      "name": "Cordis plugin unload releases all tools and prompt section",
+      "pass": true
+    },
+    {
+      "name": "remount after unload does not duplicate registrations",
+      "pass": true
+    }
+  ],
+  "toolCalls": 50,
+  "workingDirectoryAccesses": 51,
+  "networkAttempts": 0,
+  "pythonChecks": {
+    "count": 3,
+    "exitCodes": [
+      0,
+      0,
+      0
+    ]
+  },
+  "strictProgress": {
+    "done": 8,
+    "total": 8
+  },
+  "strictGates": [
+    {
+      "step": "comp-prob-analysis",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "logic",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "comp-modeling",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "logic",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "comp-code",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "companions",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "logic",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "paper-figure",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "figures",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "paper-figure-html",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "figures",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "comp-review",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "review_verdict",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "comp-paper-zh",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "companions",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "ai_disclosure",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "pages",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "paper_data_check",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    },
+    {
+      "step": "comp-compile-zh",
+      "results": [
+        {
+          "gate": "artifact",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "pdf_pages",
+          "ok": true,
+          "code": 0
+        },
+        {
+          "gate": "paper_data_check",
+          "ok": true,
+          "code": 0
+        }
+      ]
+    }
+  ],
+  "hostDisposed": true,
+  "boundaries": [
+    "Real Cordis Context, ToolsService, SystemPrompt, LocalFileSystem, SessionStore, SessionProjectionRegistry, WorkingDirectoryService and NativeToolExecutor.",
+    "Minimal Agent carrier uses an actual Session and a real active Cordis context; no Agent loop or model provider is mounted.",
+    "All modeling actions run through ctx.tools.execute and the real native schema/policy/output pipeline.",
+    "Artifacts are deterministic synthetic fixtures. Python paper_data_check is run for real; PDF is generated with pdf-lib, not TeX.",
+    "No Desktop/Web UI end-to-end verification; no server started; no profile or system install modified; no LLM or image requests.",
+    "Only a clean plugin tree is supported: never point MMW_PLUGIN_ROOT at a checkout containing user image credentials.",
+    "Raw ToolDefinition parameters are model-facing declarations: rc.3 native pipeline invokes the raw execute body without defineTool argument validation. Missing input_dir returns the plugin business error, not a required-parameter schema error. Output values are validated by the real native pipeline."
+  ],
+  "reproduce": "test/dsh-host-compat.mjs"
+}

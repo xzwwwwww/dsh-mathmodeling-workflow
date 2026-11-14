@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-14：DSH 0.2.2-rc.3 兼容性验证（插件仍为 0.5.3）
+
+- 对照官方 rc.2/rc.3 tags，25 个插件相关 API、Cordis、Loader、Include 与管理接口源码/manifest 的 SHA-256 相同；无需业务代码适配。
+- 使用精确 rc.3 npm 包完成真实隔离 Host 集成：16 组检查、50 次 native 工具调用，严格模式完整 8 步验收、问答恢复、fast、卸载重挂载均通过；未运行 GUI 端到端或模型调用环。
+- 新增可复跑的 Host 集成脚本、独立测试项目清单与脱敏结果，更新 rc.3 安装说明；原有全量回归通过。详见 [兼容性记录](docs/compatibility/dsh-0.2.2-rc.3.md)。
+
 ## 0.5.3
 
 - 随包分发官方 xpatch 0.3a，以及实编译依赖链中的 xstring、scalefnt、mweights、fontaxes；保存完整上游源码、文档、LPPL 许可证和 SHA-256 来源记录。
