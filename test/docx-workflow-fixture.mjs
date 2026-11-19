@@ -12,7 +12,7 @@ export async function put(workspace, relativePath, value) {
   await writeFile(file, typeof value === 'string' || value instanceof Uint8Array ? value : JSON.stringify(value));
 }
 
-const results = { cost: 12.5, accuracy: 0.94, evaluation: { sample_count: 240, comparator_cost: 19.8 } };
+const results = { cost: 12.5, accuracy: 0.94, recall: 0.83, evaluation: { sample_count: 240, comparator_cost: 19.8 } };
 const manifest = `<!-- BEGIN FIGURE_MANIFEST -->
 **DATA 数据图：**
 - fig_q1_cost
@@ -120,7 +120,10 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
   await put(ws, 'paper/main.md', chinesePaper.replace('| 12.5 |', '| 78.91 |'));
   checkNumbers(1);
   await finish('paper_data_check', false);
-  await put(ws, 'paper/main.md', chinesePaper);
+  await put(ws, 'paper/main.md', chinesePaper.replace('## 参考文献', '准确率为83%，召回率为94%。\n\n## 参考文献'));
+  checkNumbers(1);
+  await finish('paper_data_check', false);
+  await put(ws, 'paper/main.md', chinesePaper.replace('## 参考文献', '准确率为94%，召回率为83%。\n\n## 参考文献'));
   precheck('precheck', ['--report']);
   checkNumbers();
   const certPath = path.join(ws, 'PAPER_DATA_CHECK_RESULT.json');

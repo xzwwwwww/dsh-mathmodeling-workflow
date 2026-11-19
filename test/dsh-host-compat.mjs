@@ -210,12 +210,18 @@ try {
   next=await call('modeling_next',{workspace:ws}); assert.equal(next.step.key,'comp-paper-zh');
   await put(ws,'paper/main.tex','\\documentclass{article}\n\\begin{document}\n'+ 'Deterministic synthetic body. '.repeat(100)+'\n\\input{sections/body}\n\\end{document}\n');
   await put(ws,'paper/sections/body.tex','\\section{Fixture results}\nThe observed value is 12.5.\n'+'Synthetic evidence with stable values. '.repeat(30));
-  const pythonCheck=() => {
+  const pythonCheck=(expected=0) => {
     const args=[path.join(ws,'_utils','paper_data_check.py'),'--mode','pdf','--workspace',ws,'--quiet'];
     const result=spawnSync(python,args,{stdio:'inherit',cwd:ws});
     report.commands.push({executable:python,args,cwd:ws,status:result.status,error:result.error?.message});
-    assert.equal(result.status,0,'real paper_data_check.py failed');
+    assert.equal(result.status,expected,'real paper_data_check.py returned an unexpected verdict');
   };
+  await put(ws,'results.json',{accuracy:0.91,recall:0.83});
+  const body=await readFile(path.join(ws,'paper/sections/body.tex'),'utf8');
+  await put(ws,'paper/sections/body.tex',body+'\nAccuracy was 83\\%, recall was 91\\%.');
+  pythonCheck(1);
+  assert.ok((await finish('comp-paper-zh',false)).results.some(r=>r.gate==='paper_data_check'&&!r.ok));
+  await put(ws,'paper/sections/body.tex',body+'\nAccuracy was 91\\%, recall was 83\\%.');
   pythonCheck();
   assert.equal(JSON.parse(await readFile(path.join(ws,'PAPER_DATA_CHECK_RESULT.json'),'utf8')).status,'passed');
   await put(ws,'paper/sections/body.tex',(await readFile(path.join(ws,'paper/sections/body.tex'),'utf8'))+'\nAdditional fixture sentence.');

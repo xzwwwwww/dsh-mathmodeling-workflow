@@ -44,6 +44,43 @@ def certificate(workspace):
 
 
 class PaperAuditTests(unittest.TestCase):
+    def test_metric_identity_in_prose_math_and_tables(self):
+        cases = {
+            "docx": ["准确率 **{a}%**，查全率（{r}％）。",
+                     "准确率和召回率分别为 {a}% 和 {r}%。",
+                     "Accuracy and recall were {a}% and {r}%, respectively.",
+                     "We achieved {a}% accuracy and {r}% recall.",
+                     r"$\mathrm{{accuracy}}={a}\%,\quad \mathrm{{recall}}={r}\%$",
+                     "| Method | Accuracy | Recall |\n|---|---|---|\n| A | {a}% | {r}% |",
+                     "| Metric | Result |\n|---|---|\n| Accuracy | {a}% |\n| Recall | {r}% |"],
+            "pdf": [r"Accuracy is {a}\%, and recall is {r}\%.",
+                    r"\begin{{align}}\mathrm{{accuracy}}&={a}\%\\\mathrm{{recall}}&={r}\%\end{{align}}",
+                    r"\begin{{tabular}}{{lrr}} Method & Accuracy & Recall \\ A & {a}\% & {r}\% \\ \end{{tabular}}"],
+        }
+        for mode, forms in cases.items():
+            for form in forms:
+                for accuracy, recall, expected in [(91, 83, 0), (83, 91, 1)]:
+                    with self.subTest(mode=mode, form=form, accuracy=accuracy), tempfile.TemporaryDirectory() as tmp:
+                        ws = Path(tmp)
+                        simple_paper(ws, form.format(a=accuracy, r=recall), mode)
+                        put(ws, "results.json", '{"model":{"testAccuracy":0.91,"recall_pct":83}}')
+                        run = run_paper(ws, mode)
+                        self.assertEqual(run.returncode, expected, run.stdout + run.stderr)
+                        if expected:
+                            report = (ws / paper.REPORT_NAME).read_text(encoding="utf8")
+                            self.assertIn("model.testAccuracy=0.91", report)
+                            self.assertIn("model.recall_pct=83", report)
+
+    def test_wrong_scale_and_missing_metric_do_not_borrow_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            for claim in ["Accuracy was 0.93%.", "Recall was 93%."]:
+                simple_paper(ws, claim, "docx")
+                self.assertEqual(run_paper(ws, "docx").returncode, 1)
+            put(ws, "figures/partial.json", "{")
+            self.assertEqual(run_paper(ws, "docx").returncode, 2)
+            self.assertIn("partial.json", certificate(ws)["reason"])
+
     def test_math_results_cannot_hide_behind_a_matching_prose_number(self):
         for claim in [r"$99.9\%$", r"\(99.9\%\)", r"\[99.9\%\]",
                       r"$$99.9\%$$", r"\begin{equation}accuracy=99.9\%\end{equation}",
@@ -280,7 +317,7 @@ There are 3 models and 5 figures. In 2025 we chose the model.
             result = run_paper(workspace)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = certificate(workspace)
-            self.assertEqual(report["version"], 1)
+            self.assertEqual(report["version"], 2)
             self.assertEqual(report["mode"], "pdf")
             expected = [{"path": name, "sha256": hashlib.sha256((workspace / name).read_bytes()).hexdigest()}
                         for name in sorted(included, key=lambda name: name.encode("utf-16-be"))]

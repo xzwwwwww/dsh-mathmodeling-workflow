@@ -190,13 +190,13 @@ async function main() {
   await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_REPORT.md'), '# 报告\n\n## 结论\n\n通过：论文里的数据性数字都能在 JSON 找到来源。\n', 'utf8');
   const oldReports = await gatePaperDataCheck(pdcWs, {});
   check('旧 Markdown 报告没有本次输入凭据不能放行', !oldReports.ok && /PAPER_DATA_CHECK_RESULT/.test(oldReports.hint));
-  await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_RESULT.json'), JSON.stringify({ version: 1, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(pdcWs) }));
+  await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_RESULT.json'), JSON.stringify({ version: 2, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(pdcWs) }));
   const noMarker = await gatePaperDataCheck(pdcWs, {});
   check('报告通过但缺标记 → 闸门失败', !noMarker.ok && /DATA_CHECK_PASSED/.test(noMarker.hint), noMarker.hint);
 
   await mkdir(path.join(pdcWs, 'paper'), { recursive: true });
   await writeFile(path.join(pdcWs, 'paper', 'main.tex'), '% DATA_CHECK_PASSED\n', 'utf8');
-  await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_RESULT.json'), JSON.stringify({ version: 1, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(pdcWs) }));
+  await writeFile(path.join(pdcWs, 'PAPER_DATA_CHECK_RESULT.json'), JSON.stringify({ version: 2, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(pdcWs) }));
   const okGate = await gatePaperDataCheck(pdcWs, {});
   check('报告通过 + 标记及当前输入哈希在位 → 闸门通过', okGate.ok, JSON.stringify(okGate.detail));
 

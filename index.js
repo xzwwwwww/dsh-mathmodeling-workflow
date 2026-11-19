@@ -16,7 +16,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.6.2';
+const BUILD = '0.6.3';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -427,8 +427,8 @@ export function apply(ctx, config = {}) {
         if (key) throw new Error(`工作区里没有步骤 ${key}；可用：${state.steps.map((s) => s.key).join(', ')}`);
         return { report: '没有可验收的步骤（全部已完成）。', pass: true, done: true, next: null };
       }
-      const recheckDocx = key === 'docx-export' && step.status === 'completed';
-      if (isSettledStep(step) && !recheckDocx) {
+      const recheckFinal = step.status === 'completed' && Boolean(key && /^(?:docx-export|comp-compile-(?:zh|en))$/.test(key));
+      if (isSettledStep(step) && !recheckFinal) {
         const after = nextPendingStep(state);
         return {
           report: `第 ${step.order + 1} 步「${step.title}」${step.status === 'skipped' ? '已按快速模式跳过，未执行复核' : '已经验收通过，无需重复验收'}。${after ? `下一步：${after.title}（${after.key}）→ 调 modeling_next` : '全部步骤已结束 → 调 modeling_status 汇报。'}`,
@@ -440,7 +440,7 @@ export function apply(ctx, config = {}) {
       }
 
       const current = nextPendingStep(state);
-      if (step !== current && !(recheckDocx && !current)) {
+      if (step !== current && !(recheckFinal && !current)) {
         throw new Error(`不能越过前序步骤验收 ${step.key}；当前步骤是 ${current?.key ?? '无'}，请先完成当前步骤`);
       }
       if (isFastReview(state, step)) {
@@ -453,7 +453,7 @@ export function apply(ctx, config = {}) {
           next: after ? { step: after.key, title: after.title, promptPath: after.promptPath } : null,
         };
       }
-      if (!recheckDocx && !['running', 'blocked', 'waiting'].includes(step.status)) {
+      if (!recheckFinal && !['running', 'blocked', 'waiting'].includes(step.status)) {
         throw new Error(`步骤 ${step.key} 尚未派发；请先调 modeling_next 获取本步规格并执行，再验收`);
       }
 
@@ -672,16 +672,15 @@ export function apply(ctx, config = {}) {
       const paperPath = path.join(workspace, paperRel);
       const paperInfo = await stat(paperPath).catch(() => null);
       let finalPaper = null;
-      if (word) {
-        const exportStep = state.steps.find((s) => s.key === 'docx-export');
-        if (exportStep?.status === 'completed') {
-          const verified = await runGates(workspace, exportStep, exec.signal);
-          if (verified.ok) finalPaper = paperPath;
-          else paper = `Word 产物待重新验收：${verified.hints[0] ?? '检查导出报告'}`;
-        } else if (paperInfo?.isFile()) {
-          paper = 'Word 已生成，尚未验收';
-        }
-      } else if (paperInfo?.isFile()) finalPaper = paperPath;
+      const finalStep = state.steps.find((s) => word ? s.key === 'docx-export' : s.key.startsWith('comp-compile-'));
+      const formatLabel = word ? 'Word' : 'PDF';
+      if (finalStep?.status === 'completed' && paperInfo?.isFile()) {
+        const verified = await runGates(workspace, finalStep, exec.signal);
+        if (verified.ok) finalPaper = paperPath;
+        else paper = `${formatLabel} 产物待重新验收：${verified.hints[0] ?? '检查终稿'}`;
+      } else if (paperInfo?.isFile()) {
+        paper = `${formatLabel} 已生成，尚未验收`;
+      }
       if (finalPaper) paper = `${paperRel}（${paperInfo.size} B）`;
 
       const pendingLines = openQuestions(state).map(

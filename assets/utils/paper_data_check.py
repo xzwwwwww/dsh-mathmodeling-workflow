@@ -35,6 +35,7 @@ PASS_MARKER_MD = "<!-- DATA_CHECK_PASSED -->"
 CHECKLIST_NAME = "PAPER_DATA_CHECKLIST.md"
 REPORT_NAME = "PAPER_DATA_CHECK_REPORT.md"
 RESULT_NAME = "PAPER_DATA_CHECK_RESULT.json"
+RESULT_VERSION = 2
 TOLERANCE = 0.005  # 相对容差（0.5%）
 
 
@@ -60,17 +61,17 @@ def collect_json_sources(workspace: Path):
     figures = workspace / "figures"
     if figures.is_dir():
         files += sorted(p for p in figures.rglob("*.json")
-                        if not p.name.startswith("TABLE_DATA_CHECK_"))
+                        if p.is_file() and not p.is_symlink() and not p.name.startswith("TABLE_DATA_CHECK_"))
     for name in ("results.json", "all_results.json"):
         candidate = workspace / name
-        if candidate.is_file():
+        if candidate.is_file() and not candidate.is_symlink():
             files.append(candidate)
     entries = []
     for path in files:
         try:
-            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-        except Exception:
-            continue
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"结果 JSON 无法读取：{path.relative_to(workspace)}：{exc}") from exc
         rel = path.relative_to(workspace).as_posix()
         for key, value in flatten_json(data):
             entries.append((rel, key, value))
@@ -236,6 +237,8 @@ def collect_paper_texts(workspace: Path, mode: str):
     paper = workspace / "paper"
     md = paper / "main.md"
     if mode == "docx":
+        if md.is_symlink():
+            raise ValueError("Word 源稿 paper/main.md 必须是普通文件")
         return [(md, md.read_text(encoding="utf-8"))] if md.is_file() else []
     main = paper / "main.tex"
     graph = tex_input_paths(workspace)
@@ -297,14 +300,20 @@ def _math_data(match):
     """Keep displayed numeric results, but not symbolic formula coefficients/subscripts/tags."""
     text = match[1]
     text = re.sub(r"\\(?:label|tag)\*?\{[^}]*\}", " ", text)
-    # Percentages are data even inside a larger math expression.
-    percentages = re.findall(r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?\s*\\?%", text)
-    if percentages:
-        return " " + " ".join(p.replace(" ", "") for p in percentages) + " "
     text = re.sub(r"\\(?:text|textrm|mathrm|mathbf|operatorname)\{([^{}]*)\}", r"\1", text)
     text = re.sub(r"\\(?:left|right|quad|qquad|displaystyle)\b|\\[,;! ]", " ", text).strip()
-    # Pure numerical values, lists and uncertainty intervals are results, not symbolic formulae.
     number = r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?"
+    # Retain the name in `\\mathrm{Recall}=83\\%` and separate aligned claims.
+    percentages = []
+    pos = 0
+    for value in re.finditer(rf"{number}\s*(?:\\?[%％])", text):
+        names = list(METRIC_RE.finditer(text, pos, value.start()))
+        label = names[-1].lastgroup + " = " if names else ""
+        percentages.append(label + value[0])
+        pos = value.end()
+    if percentages:
+        return " " + ", ".join(percentages) + " "
+    # Pure numerical values, lists and uncertainty intervals are results, not symbolic formulae.
     numeric = rf"{number}(?:\s*(?:,|;|\\pm|±)\s*{number})*"
     if re.fullmatch(numeric, text):
         return " " + text + " "
@@ -353,6 +362,7 @@ def strip_non_data(text: str, mode: str) -> str:
     text = re.sub(r"\\(?:section|subsection|subsubsection|chapter)\*?(?:\[[^]]*\])?\{([^}]*)\}",
                   lambda m: " " + re.sub(r"^\s*\d+(?:\.\d+)*[.)、]?\s+", "", m[1]) + " ", text)
     text = re.sub(r"\\title(?:\[[^]]*\])?\{[^}]*\}", " ", text)
+    text = bind_tables(text, mode)
     text = re.sub(r"\\(?:begin|end)\{[^}]*\}(?:\[[^]]*\])?(?:\{[^}]*\})?", " ", text)
     text = re.sub(r"\\item\s*\[[^]]*\]", " ", text)
     return text
@@ -377,46 +387,140 @@ EN_SKIP_SUFFIX = {
 }
 
 
-# 将正文的局部量纲和 JSON 叶子字段对齐；未标注的值只可做同尺度核对。
-METRIC_RE = re.compile(
-    r"(?P<money>成本|费用|金额|价格|收入|利润|预算|美元|元|(?<![a-z])(?:costs?|prices?|revenue|profit|budget|dollars?|yuan|rmb|cny|usd)(?![a-z]))|"
-    r"(?P<duration>耗时|时长|小时|分钟|秒|(?<![a-z])(?:duration|hours?|minutes?|seconds?|elapsed)(?![a-z]))|"
-    r"(?P<distance>距离|里程|千米|公里|(?<![a-z])(?:distance|mileage|kilomet(?:er|re)s?|km)(?![a-z]))|"
-    r"(?P<count>人数|数量|人次|(?<![a-z])(?:headcount|persons?|people|count)(?![a-z]))|"
-    r"(?P<ratio>准确率|精确率|召回率|覆盖率|概率|比例|占比|百分比|百分率|(?<![a-z])"
-    r"(?:accuracy|precision|recall|coverage|probability|prob|percent(?:age)?|ratio|rate|share|auc|f1(?:_score)?|pct)(?![a-z]))",
-    re.I,
-)
+# Keep metric identity separate from units and from the numeric scale.
+ALIASES = {
+    "balanced_accuracy": r"平衡准确率|balanced[ _-]+accuracy",
+    "accuracy": r"准确率|正确率|准确度|accuracy|acc",
+    "precision": r"精确率|查准率|precision|ppv",
+    "recall": r"召回率|查全率|灵敏度|recall|sensitivity|tpr",
+    "specificity": r"特异度|特异性|specificity|tnr",
+    "coverage": r"覆盖率|coverage(?:[ _-]+rate)?",
+    "f1": r"f[ _-]?1(?:[ _-]+score)?",
+    "auc": r"(?:roc[ _-]+)?auc",
+    "error_rate": r"误差率|错误率|error[ _-]+rate",
+    "probability": r"概率|probability|prob",
+    "share": r"占比|share|proportion",
+    "profit": r"利润|profits?",
+    "revenue": r"收入|收益|revenue",
+    "budget": r"预算|budgets?",
+    "price": r"价格|prices?",
+    "cost": r"成本|费用|costs?",
+    "duration": r"耗时|用时|时长|duration|elapsed|runtime",
+    "distance": r"距离|里程|distance|mileage",
+    "count": r"人数|数量|人次|headcount|persons?|people|count",
+    "ratio": r"比例|百分比|百分率|percent(?:age)?|ratio|rate|pct",
+    "money": r"金额|美元|元|dollars?|yuan|rmb|cny|usd",
+    "time_unit": r"小时|分钟|秒|hours?|minutes?|seconds?",
+    "distance_unit": r"千米|公里|kilomet(?:er|re)s?|km",
+}
+METRIC_RE = re.compile("|".join(rf"(?P<{name}>(?<![a-z])(?:{alias})(?![a-z]))"
+                                for name, alias in ALIASES.items()), re.I)
+RATIO_METRICS = {
+    "balanced_accuracy", "accuracy", "precision", "recall", "specificity", "coverage",
+    "f1", "auc", "error_rate", "probability", "share", "ratio",
+}
+MONEY_METRICS = {"cost", "price", "revenue", "profit", "budget", "money"}
+UNIT_GROUPS = {"ratio", "money", "time_unit", "distance_unit"}
+CLAUSE_BOUNDARY = re.compile(r"[，,。；;!?！？|&\n%％]|\.\s+|\bpercent\b|\b(?:and|while|whereas)\b|以及|而(?=召回|准确|精确|覆盖)", re.I)
+PERCENT_SUFFIX = re.compile(r"^\s*(?:\\?[%％]|percent\b)", re.I)
+
+
+def metric_hint(label):
+    label = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", label)
+    matches = [m.lastgroup for m in METRIC_RE.finditer(label)]
+    specific = [kind for kind in matches if kind not in UNIT_GROUPS]
+    return (specific or matches or [None])[-1]
 
 
 def claim_metric(before, after, percent):
+    clause = CLAUSE_BOUNDARY.split(before)[-1]
+    claim = metric_hint(clause)
+    if claim and claim not in UNIT_GROUPS:
+        return claim
+    # Only take a following metric for an explicit label, e.g. `91% accuracy`.
     if percent:
-        return "ratio"
-    # 优先匹配紧随数字的单位，再看同一短句、上一个数字之后最近的指标。
+        tail = PERCENT_SUFFIX.sub("", after, count=1).lstrip(" \t*_`)）")
+        named = METRIC_RE.match(tail)
+        if named and named.lastgroup in RATIO_METRICS:
+            return named.lastgroup
+        return claim if claim in RATIO_METRICS else "ratio"
     unit = re.match(r"^\s*(?:万|亿)?(美元|元|小时|分钟|秒|公里|千米|人次|人)", after)
     if unit:
-        return {"人": "count", "人次": "count"}.get(unit[1]) or METRIC_RE.search(unit[1]).lastgroup
-    english_unit = METRIC_RE.match(after.lstrip())
-    if english_unit:
-        return english_unit.lastgroup
-    clause = re.split(r"[,，。;；%]", before)[-1]
-    hints = list(METRIC_RE.finditer(clause))
-    return hints[-1].lastgroup if hints else None
+        return "count" if unit[1] in {"人", "人次"} else metric_hint(unit[1])
+    immediate = METRIC_RE.match(after.lstrip())
+    return immediate.lastgroup if immediate else claim
+
+
+def bind_table_rows(rows, separator, header_index=0):
+    """Add a row/column metric to numeric cells, leaving ambiguous headers unbound."""
+    if len(rows) < 2:
+        return "\n".join(rows)
+    split = lambda row: re.split(rf"(?<!\\){re.escape(separator)}", row.strip().strip("|"))
+    columns = [metric_hint(cell) for cell in split(rows[header_index])]
+    output = []
+    for index, row in enumerate(rows):
+        cells = split(row)
+        if index <= header_index or len(cells) != len(columns):
+            output.append(row)
+            continue
+        first_metric = metric_hint(cells[0]) if not NUMBER_RE.search(cells[0]) else None
+        bound = []
+        for col, cell in enumerate(cells):
+            metric = columns[col] or first_metric
+            if metric and NUMBER_RE.search(cell) and not metric_hint(cell):
+                cell = f"{metric} = {cell.strip()}"
+            bound.append(cell)
+        output.append(f" {separator} ".join(bound))
+    return "\n".join(output)
+
+
+def bind_tables(text, mode):
+    if mode == "pdf":
+        pattern = (r"(?s)\\begin\{(?P<env>tabularx?|longtable)\*?\}"
+                   r"(?:\s*\[[^]]*\])?(?:\s*\{(?:[^{}]|\{[^{}]*\})*\}){1,2}"
+                   r"(?P<rows>.*?)\\end\{(?P=env)\*?\}")
+
+        def tex_table(match):
+            rows = re.split(r"\\\\(?:\[[^]]*\])?", match["rows"])
+            rows = [re.sub(r"\\(?:toprule|midrule|bottomrule|hline)\b", " ", row).strip() for row in rows]
+            return "\n" + bind_table_rows(rows, "&") + "\n"
+
+        return re.sub(pattern, tex_table, text)
+    return re.sub(r"(?m)(?:^ {0,3}\|[^\n]+\n)+(?:^ {0,3}\|[^\n]+(?:$|\n))?",
+                  lambda m: bind_table_rows(m[0].splitlines(), "|") + "\n", text)
+
+
+PAIR_VALUE = r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)\s*(?:\\?[%％]|percent\b)?"
+RESPECTIVE_PAIR = re.compile(
+    rf"(?P<first>{'|'.join(ALIASES[k] for k in sorted(RATIO_METRICS - {'ratio'}))})"
+    r"\s*(?:和|与|及|、|and)\s*"
+    rf"(?P<second>{'|'.join(ALIASES[k] for k in sorted(RATIO_METRICS - {'ratio'}))})"
+    rf"\s*(?:分别(?:为|是|达到)?|(?:were|are)\s+)(?P<a>\s*{PAIR_VALUE})"
+    rf"\s*(?:和|与|及|、|，|,|and)\s*(?P<b>{PAIR_VALUE})(?:\s*,?\s*respectively\b|(?<=[%％\d]))", re.I,
+)
 
 
 def extract_numbers(text: str):
-    """返回 [(原始串, 浮点值, 上下文, 小数位, 是否百分数, 指标量纲)]，已过滤编号/年份/章节号（中英文都覆盖）。"""
+    """返回已过滤编号、年份和章节号的数字及其局部指标。"""
+    def bind_pair(match):
+        if not ("分别" in match[0] or re.search(r"respectively\b", match[0], re.I)):
+            return match[0]
+        return f"{match['first']} = {match['a'].strip()}, {match['second']} = {match['b'].strip()}"
+
+    text = RESPECTIVE_PAIR.sub(bind_pair, text)
     found = []
     for match in NUMBER_RE.finditer(text):
         raw = match.group(0)
         start, end = match.span()
-        before = text[max(0, start - 24):start].rstrip()
+        before = text[max(0, start - 96):start].rstrip()
         after = text[end:end + 32]
-        if before and before[-1] in SKIP_PREFIX:
+        percent = bool(PERCENT_SUFFIX.match(after))
+        metric = claim_metric(before, after, percent)
+        if before and before[-1] in SKIP_PREFIX and not (metric and (percent or before[-1] in "(（" and metric not in UNIT_GROUPS)):
             continue
         # 英文编号前缀：Figure 3 / Table~2 / Section 4 / Eq.(5)
         word = re.search(r"([A-Za-z]+)\.?$", before.replace("~", " ").replace("(", " ").rstrip())
-        if word and word.group(1).lower() in EN_SKIP_PREFIX:
+        if word and word.group(1).lower() in EN_SKIP_PREFIX and not percent:
             continue
         # 英文数量声明：数字后面紧跟 sub-problems / figures / tables 等（不是结果数据）
         tail = re.match(r"\s*([A-Za-z-]+)", text[end:end + 30])
@@ -426,11 +530,10 @@ def extract_numbers(text: str):
             continue
         if re.match(r"(?i)(st|nd|rd|th)\b", after):              # 1st / 2nd / 3rd / 4th
             continue
-        if re.fullmatch(r"(19|20)\d{2}", raw):                   # 年份
+        if re.fullmatch(r"(19|20)\d{2}", raw) and not metric:                   # 年份
             continue
         if raw.lstrip("-").startswith("0") and len(raw) > 1 and "." not in raw:
             continue
-        percent = after.startswith("%") or after.startswith("\\%")
         try:
             value = float(raw)
         except ValueError:
@@ -439,32 +542,52 @@ def extract_numbers(text: str):
             continue
         mantissa, _, exponent = raw.lower().partition("e")
         decimals = (len(mantissa.split(".")[1]) if "." in mantissa else 0) - int(exponent or 0)
-        found.append((raw, value, (before[-12:] + raw + after[:12]).replace("\n", " "), decimals, percent, claim_metric(before, after, percent)))
+        found.append((raw, value, (before[-12:] + raw + after[:12]).replace("\n", " "), decimals, percent, metric))
     return found
 
 
 def index_values(entries):
     groups = defaultdict(list)
-    for _, key, value in entries:
-        leaf = re.sub(r"\[.*$", "", str(key).split(".")[-1])
-        kinds = [m.lastgroup for m in METRIC_RE.finditer(leaf)]
-        kind = "ratio" if "ratio" in kinds else (kinds[-1] if kinds else None)
-        groups[kind].append(value)
-        groups["all"].append(value)
+    for source, key, value in entries:
+        segments = [re.sub(r"\[\d+\]", "", part) for part in key.split(".")]
+        kind = next((metric for part in reversed(segments) if (metric := metric_hint(part))), None)
+        item = (source, key, value)
+        groups[kind].append(item)
+        groups["all"].append(item)
+        if kind in RATIO_METRICS - {"ratio"}:
+            groups["ratio"].append(item)
+        if kind in MONEY_METRICS - {"money"}:
+            groups["money"].append(item)
+        if kind == "duration":
+            groups["time_unit"].append(item)
+        if kind == "distance":
+            groups["distance_unit"].append(item)
     return groups
 
 
+def match_candidates(groups, metric):
+    if not metric:
+        return groups["all"]
+    # Named metrics must be supported by their own fields. Legacy unlabeled values
+    # can back up generic percentages/units, but cannot certify a named claim.
+    return groups.get(metric, ()) or (groups.get(None, ()) if metric in UNIT_GROUPS else ())
+
+
 def matches(number, decimals, percent, groups, metric):
-    # 有同量纲字段时只用这些字段；旧结果中未标注量纲的值仅作为同尺度兜底。
-    values = groups.get(metric, []) if metric else groups["all"]
-    known_metric = bool(metric and values)
-    if metric and not values:
-        values = groups.get(None, [])
+    values = match_candidates(groups, metric)
     half = 0.5 * 10 ** -decimals
-    for value in values:
+    for source, key, value in values:
+        if percent:
+            # Ratio fields hold fractions by convention up to 1. Explicit pct fields
+            # or values above 1 already carry percentage points.
+            in_points = abs(value) > 1 or re.search(r"(?:percent(?:age)?|pct|百分比)(?![a-z])", key, re.I)
+            expected = value if in_points else 100 * value
+            if abs(number - expected) <= max(half, TOLERANCE * abs(expected)):
+                return True
+            continue
         if abs(number - value) <= max(half, TOLERANCE * abs(value)):
             return True
-        if percent or (metric == "ratio" and known_metric):
+        if metric in RATIO_METRICS:
             if abs(number / 100 - value) <= max(half / 100, TOLERANCE * abs(value)):
                 return True
             if not percent and abs(number - value / 100) <= max(half, TOLERANCE * abs(value / 100)):
@@ -489,7 +612,7 @@ def write_checklist(workspace: Path, mode: str, sources, entries, pending):
         "1. 打开论文源文件（LaTeX 沿 `paper/main.tex` 的正文引用链核对，含外置表格；Word 看 `paper/main.md`）。",
         "2. 只核对「数据性数字」：表格单元格、正文里引用实验结果/统计量/最优解/对比指标的数字。",
         "3. 编号（图 3、表 2、式 5）、年份、日期、章节序号、公式内常数、文献里的数字都不必核对。",
-        "4. 每个数据性数字都必须能在下面 JSON 清单或 `figures/TABLE_*` 里找到来源；找不到就改数或改表述。",
+        "4. 每个数据性数字都必须能在 JSON 找到来源。明确命名的指标须匹配同一指标字段。",
         "5. 修完重新跑本脚本，直到报告给出「通过」。",
         "",
         "---",
@@ -507,9 +630,9 @@ def write_checklist(workspace: Path, mode: str, sources, entries, pending):
     if not pending:
         lines.append("（无）")
     else:
-        lines += ["| 文件 | 行 | 数字 | 上下文 |", "|---|---|---|---|"]
+        lines += ["| 文件 | 行 | 数字 | 指标 | 对应结果 | 上下文 |", "|---|---|---|---|---|---|"]
         for item in pending[:200]:
-            lines.append(f"| {item['file']} | {item['line']} | {item['raw']} | {item['context']} |")
+            lines.append(f"| {item['file']} | {item['line']} | {item['raw']} | {item['metric']} | {item['expected']} | {item['context'].replace(chr(124), chr(47))} |")
     (workspace / CHECKLIST_NAME).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -545,9 +668,9 @@ def write_report(workspace: Path, mode: str, sources, entries, numbers, pending)
         "",
     ]
     if pending:
-        lines += ["## 待修列表", "", "| 文件 | 行 | 数字 | 上下文 |", "|---|---|---|---|"]
+        lines += ["## 待修列表", "", "| 文件 | 行 | 数字 | 指标 | 对应结果 | 上下文 |", "|---|---|---|---|---|---|"]
         for item in pending[:200]:
-            lines.append(f"| {item['file']} | {item['line']} | {item['raw']} | {item['context']} |")
+            lines.append(f"| {item['file']} | {item['line']} | {item['raw']} | {item['metric']} | {item['expected']} | {item['context'].replace(chr(124), chr(47))} |")
         lines.append("")
     (workspace / REPORT_NAME).write_text("\n".join(lines) + "\n", encoding="utf-8")
     return passed
@@ -584,7 +707,7 @@ def input_snapshot(workspace: Path, mode="pdf"):
                      and p.suffix in {".json", ".tex", ".md"}
                      and not p.name.startswith("TABLE_DATA_CHECK_"))
     paths.update(workspace / name for name in ("results.json", "all_results.json")
-                 if (workspace / name).is_file())
+                 if (workspace / name).is_file() and not (workspace / name).is_symlink())
     if mode != "docx":
         paths.update(tex_input_paths(workspace))
     return [{"path": p.relative_to(workspace).as_posix(),
@@ -593,7 +716,7 @@ def input_snapshot(workspace: Path, mode="pdf"):
 
 
 def write_result(workspace, mode, status, *, reason="", inputs=None, **stats):
-    result = {"version": 1, "status": status, "mode": mode,
+    result = {"version": RESULT_VERSION, "status": status, "mode": mode,
               "inputs": [] if inputs is None else inputs, "reason": reason, **stats}
     (workspace / RESULT_NAME).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -605,9 +728,13 @@ def revoke_pass(workspace, mode):
         (workspace / name).unlink(missing_ok=True)
     paper = workspace / "paper"
     targets = list(paper.rglob("*.tex")) if mode != "docx" and paper.is_dir() else []
-    if (paper / "main.md").is_file():
+    if mode == "docx" and (paper / "main.md").is_file():
+        targets.append(paper / "main.md")
+    elif mode == "pdf" and not (paper / "main.tex").is_file() and (paper / "main.md").is_file():
         targets.append(paper / "main.md")
     for path in targets:
+        if path.is_symlink():
+            continue
         # Cleanup must still revoke ASCII markers in a malformed UTF-8 input.
         raw = path.read_bytes()
         cleaned = raw.replace(PASS_MARKER_TEX.encode(), b"").replace(PASS_MARKER_MD.encode(), b"")
@@ -632,11 +759,19 @@ def main() -> int:
     workspace = Path(args.workspace).resolve()
     mode = args.mode
     if mode == "auto":
-        mode = "docx" if (workspace / "paper" / "main.md").is_file() and not (
-            workspace / "paper" / "sections").is_dir() else "pdf"
+        state_path = workspace / ".mmw" / "state.json"
+        try:
+            configured = json.loads(state_path.read_text(encoding="utf-8")).get("switches", {}).get("output_format")
+        except (OSError, ValueError, AttributeError):
+            configured = None
+        if configured in {"docx", "pdf"}:
+            mode = configured
+        else:
+            mode = "docx" if (workspace / "paper/main.md").is_file() and not (workspace / "paper/main.tex").is_file() else "pdf"
 
     try:
         revoke_pass(workspace, mode)
+        initial = input_snapshot(workspace, mode)
         chunks = collect_paper_texts(workspace, mode)
         sources = list(dict.fromkeys(path for path, _ in chunks))
         if not sources:
@@ -664,10 +799,14 @@ def main() -> int:
                     line_no = original[:offset].count("\n") + 1 if offset >= 0 else 0
                     pending.append({
                         "file": path.relative_to(workspace).as_posix(),
-                        "line": line_no, "raw": raw,
+                        "line": line_no, "raw": raw + ("%" if percent else ""),
+                        "metric": metric or "未识别",
+                        "expected": "; ".join(f"{src}:{key}={v:g}" for src, key, v in match_candidates(groups, metric)[:5]) or "无同指标结果字段",
                         "context": context.replace("\n", " ")[:60],
                     })
 
+        if initial != input_snapshot(workspace, mode):
+            raise ValueError("论文或结果在核对期间被修改，请重跑")
         passed = write_report(workspace, mode, json_files, entries, numbers, pending)
         write_checklist(workspace, mode, json_files, entries, pending)
         if passed:

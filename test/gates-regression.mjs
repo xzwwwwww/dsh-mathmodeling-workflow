@@ -116,10 +116,10 @@ async function paperCheckFixture(t) {
   return ws;
 }
 async function stamp(ws, overrides = {}) {
-  await put(ws, 'PAPER_DATA_CHECK_RESULT.json', { version: 1, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(ws), ...overrides });
+  await put(ws, 'PAPER_DATA_CHECK_RESULT.json', { version: 2, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(ws), ...overrides });
 }
 
-test('F05 old marker/reports require rerun; only fresh version-1 passed JSON passes', async (t) => {
+test('F05 old marker/reports require rerun; only fresh version-2 passed JSON passes', async (t) => {
   const ws = await paperCheckFixture(t);
   const old = await gatePaperDataCheck(ws, {});
   assert.equal(old.ok, false); assert.match(old.hint, /重跑/);
@@ -127,7 +127,7 @@ test('F05 old marker/reports require rerun; only fresh version-1 passed JSON pas
   for (const status of ['failed', 'unavailable', 'unknown']) {
     await stamp(ws, { status }); assert.equal((await gatePaperDataCheck(ws, {})).ok, false);
   }
-  await stamp(ws, { version: 2 }); assert.equal((await gatePaperDataCheck(ws, {})).ok, false);
+  await stamp(ws, { version: 1 }); assert.equal((await gatePaperDataCheck(ws, {})).ok, false);
   await stamp(ws, { mode: 'unknown' }); assert.equal((await gatePaperDataCheck(ws, {})).ok, false);
   await stamp(ws);
   await put(ws, 'results.json', {});
@@ -153,7 +153,7 @@ test('F05 snapshot is sorted raw-byte hashes of the entire specified recursive i
   }
   await stamp(ws);
   await put(ws, 'figures/deep/TABLE_DATA_CHECK_old.json', 'changed but excluded');
-  await put(ws, 'PAPER_DATA_CHECK_RESULT.json', { version: 1, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(ws), extra: 'result file is not an input' });
+  await put(ws, 'PAPER_DATA_CHECK_RESULT.json', { version: 2, status: 'passed', mode: 'pdf', inputs: await paperDataInputs(ws), extra: 'result file is not an input' });
   assert.equal((await gatePaperDataCheck(ws, {})).ok, true);
   await put(ws, 'paper/new.tex', 'new file'); assert.equal((await gatePaperDataCheck(ws, {})).ok, false);
   await stamp(ws);
