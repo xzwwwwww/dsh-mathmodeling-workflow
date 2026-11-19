@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-mathmodeling-workflow",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "scripts": {
     "test": "node test/run.mjs"
   },
@@ -31,7 +31,11 @@
     "url": "https://github.com/xzwwwwww/dsh-mathmodeling-workflow/issues"
   },
   "dependencies": {
-    "pdf-lib": "1.17.1"
+    "docx": "9.7.0",
+    "fast-xml-parser": "5.8.0",
+    "jszip": "3.10.1",
+    "pdf-lib": "1.17.1",
+    "temml": "0.13.3"
   },
   "exports": {
     ".": "./index.js",

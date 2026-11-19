@@ -9,14 +9,14 @@ import { scanInput, summarizeScan } from './lib/scan.js';
 import { scaffoldWorkspace, readSkillBody, syncTemplates, refreshBundledChecks } from './lib/scaffold.js';
 import { buildStepPrompt } from './lib/prompt.js';
 import { runGates } from './lib/gates.js';
-import { ensureDocxTools } from './lib/docxRuntime.js';
+import { docxArgs, docxSkillName, ensureDocxTools, readDocxSkill, resolveDocxAgentApp } from './lib/docxRuntime.js';
 import { workspaceFlowStyle } from './lib/flowPlan.js';
 import { readState, writeState, nextPendingStep, progressOf, isSettledStep } from './lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/questions.js';
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.6.0';
+const BUILD = '0.6.1';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -182,6 +182,7 @@ export function apply(ctx, config = {}) {
       const { switches, errors } = normalizeSwitches(args);
       if (errors.length) throw new Error(errors.join('；'));
 
+      if (switches.output_format === 'docx') await resolveDocxAgentApp(base);
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
       const defaultName = `modeling-${path.basename(inputDir).replace(/[^\w\u4e00-\u9fff-]+/g, '_')}-${stamp}`;
       const workspaceName = String(args.workspace_name ?? defaultName);
@@ -336,8 +337,13 @@ export function apply(ctx, config = {}) {
       }
       const index = state.steps.findIndex((s) => s.key === step.key);
       await refreshBundledChecks(workspace, ASSETS_DIR, state.switches);
-      if (state.switches.output_format === 'docx') await ensureDocxTools(workspace, ASSETS_DIR);
-      const skillBody = await readSkillBody(ASSETS_DIR, step.skill);
+      const originalSkill = state.switches.output_format === 'docx' ? docxSkillName(step, state.switches) : null;
+      if (originalSkill) await ensureDocxTools(workspace, ASSETS_DIR, { stageSkills: true });
+      const hasWordTemplate = (state.inputFiles ?? []).some((file) => /\.do[ct]x$/i.test(file));
+      const skillBody = originalSkill
+        ? await readDocxSkill(originalSkill, { templateArgs: hasWordTemplate ? docxArgs(state.switches) : undefined })
+        : await readSkillBody(ASSETS_DIR, step.skill);
+      if (originalSkill) step.skill = originalSkill;
       const prompt = await buildStepPrompt({ workspace, state, step, skillBody, index, total: state.steps.length });
 
       const dir = path.join(workspace, step.dir);

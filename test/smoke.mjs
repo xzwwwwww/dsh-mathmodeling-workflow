@@ -365,7 +365,10 @@ async function main() {
     if (!rel.endsWith('.md')) continue;
     const text = await readFile(path.join(ASSETS, 'skills', rel), 'utf8');
     for (const m of text.matchAll(/_utils\/([A-Za-z0-9_.-]+\.(?:py|sh))/g)) {
-      if (!existsSync(path.join(ASSETS, 'utils', m[1]))) missingUtils.add(m[1]);
+      const originalDocxTool = /^(?:comp-paper-(?:zh|en)-docx|docx-[^/\\]+)[/\\]/.test(rel)
+        && /^docx_(?:precheck|export|template_analyze|template_fill)\.py$/.test(m[1])
+        && existsSync(path.join(ASSETS, 'docx-agent', 'tools', `${m[1]}c`));
+      if (!originalDocxTool && !existsSync(path.join(ASSETS, 'utils', m[1]))) missingUtils.add(m[1]);
     }
   }
   check('技能引用的 _utils 脚本都存在', missingUtils.size === 0, [...missingUtils].join(', '));

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { apply } from '../index.js';
-import { checkWordPageProof } from '../lib/docxRuntime.js';
+import { checkWordPageProof, resolveDocxAgentApp } from '../lib/docxRuntime.js';
 import { gateAiDisclosure } from '../lib/gates.js';
 import { resolveSteps } from '../lib/steps.js';
 import { normalizeSwitches } from '../lib/switches.js';
@@ -30,12 +30,16 @@ await assert.rejects(checkWordPageProof(Buffer.from('not a PDF'), 2));
 console.log('PASS DOCX switch, routing, and actual PDF page-tree gate');
 
 const check = (binary, args) => binary && spawnSync(binary, args, { stdio: 'ignore', timeout: 5000 }).status === 0;
-const dependencies = check(process.env.MMW_PYTHON, ['-I', '-c', 'import docx, PIL']) &&
-  check(process.env.MMW_PANDOC || 'pandoc', ['--version']) && check(process.env.MMW_PDFTOPPM || 'pdftoppm', ['-v']);
+const agentApp = await resolveDocxAgentApp(process.cwd()).catch((error) => {
+  if (process.env.MMW_TEST_DOCX === '1') throw error;
+  return null;
+});
+const dependencies = agentApp && check(process.env.MMW_PYTHON, ['-I', '-c', 'import docx, PIL']);
 if (!dependencies) {
-  if (process.env.MMW_TEST_DOCX === '1') throw new Error('DOCX release tests require Python with python-docx/Pillow, Pandoc 3.x and pdftoppm.');
-  console.log('SKIP live DOCX workflow (missing Python DOCX, Pandoc or PDF image converter)');
+  if (process.env.MMW_TEST_DOCX === '1') throw new Error('DOCX release tests require MMW_PYTHON with python-docx and Pillow.');
+  console.log('SKIP live DOCX workflow (requires the original Agent app and Python DOCX dependencies)');
 } else {
+  process.env.MMW_DOCX_AGENT_APP = agentApp;
   const root = await mkdtemp(path.join(os.tmpdir(), 'mmw-docx-'));
   const tools = new Map();
   const dispose = apply({ tools: { register(d) { tools.set(d.name, d); return () => tools.delete(d.name); } },

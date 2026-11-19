@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Precheck, export, and verify the modeling workflow's competition Word paper.
 
-Pandoc parses Markdown and produces native Word objects, including OMML.
-python-docx applies the layout. A separate package check and a digest stamp
-bind the final outputs to the canonical Markdown and the referenced figures.
+The local Agent's packaged DOCX tools apply the competition profile. Pandoc
+parses Markdown solely for independent source checks, and a separate Word
+package check binds the output to the source, figures, and Agent runtime.
 """
 from __future__ import annotations
 
@@ -34,8 +34,16 @@ REPORT = "DOCX_PRECHECK_REPORT.md"
 SOURCE_MAX = 8 * 1024 * 1024
 FIGURE_MAX = 48 * 1024 * 1024
 OUTPUT_MAX = 512 * 1024 * 1024
-STAMP_VERSION = 1
+STAMP_VERSION = 2
+AGENT_CONFIG = ".mmw/docx-agent.json"
+TEMPLATE_MAP = "_template_map.json"
+TEMPLATE_PREVIEW = "_template_test_filled.docx"
+TEMPLATE_KEYS = ("title", "abstract", "body", "references", "appendix")
 READER = "commonmark_x+sourcepos+implicit_figures-yaml_metadata_block-smart"
+FRONTMATTER = re.compile(r"\A---\s*\n[\s\S]*?\n---\s*\n")
+AGENT_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+SUP_SUB = re.compile(r"</?(?:sup|sub)>", re.I)
+INLINE_TAG = re.compile(r"\\tag\{([^}]+)\}")
 
 ATX_TITLE = re.compile(r"^ {0,3}#(?:[ \t]+|$)")
 COMMENT = re.compile(r"\s*(?:<!--[\s\S]*?-->\s*)+\Z")
@@ -72,11 +80,47 @@ class PaperError(Exception):
 
 @dataclass
 class Paper:
-    tree: dict
+    lines: list[str]
     source_digest: str
     figure_digests: dict[str, str]
+    image_lines: dict[int, tuple[str, str]]
+    title: str
+    first_body_heading: str
     stats: dict
     counts: dict[str, int]
+
+
+@dataclass
+class AgentRuntime:
+    app: Path
+    python: str
+    node: str
+    pandoc: str
+    precheck: Path
+    exporter: Path
+    profile: Path
+    engine: Path
+    filler: Path | None
+
+    def environment(self):
+        # The original exporter locates Node through PATH and allows an engine
+        # override. Use the resolved originals and disable Node preload/options.
+        env = {key: value for key, value in os.environ.items()
+               if key.upper() not in {"NODE_OPTIONS", "NODE_PATH", "ELECTRON_RUN_AS_NODE", "PATH"}}
+        env["PATH"] = str(Path(self.node).parent)
+        env["DOCX_CN_ENGINE_DIR"] = str(self.engine)
+        return env
+
+    def fingerprint(self):
+        paths = (Path(self.python), Path(self.node), self.precheck, self.exporter, self.profile,
+                 self.engine / "md_to_docx.js", self.engine / "mathml-to-docx.js", self.engine / "package.json",
+                 self.engine / "package-lock.json", self.filler)
+        files = {}
+        for path in paths:
+            if path is not None and path.is_file():
+                with path.open("rb") as stream:
+                    files[str(path)] = hashlib.file_digest(stream, "sha256").hexdigest()
+        return {"app": str(self.app), "files": files}
 
 
 def is_redirected(info):
@@ -152,26 +196,111 @@ def find_tool(variable, command, extra=()):
         if not folder.is_absolute():
             continue
         candidate = folder / (command + (".exe" if os.name == "nt" else ""))
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate.resolve(strict=True))
+        try:
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate.resolve(strict=True))
+        except OSError:
+            # Windows PATH may contain Microsoft Store executable aliases.
+            continue
     for candidate in extra:
         if candidate.is_file():
             return str(candidate.resolve(strict=True))
     return None
 
 
-def require_tool(variable, command):
-    path = find_tool(variable, command)
-    if not path:
-        raise PaperError(f"Install {command} or set {variable} to its absolute executable path.")
-    return path
+def resolve_agent_python(override, bundled, extension, external):
+    probe = ["-I", "-X", "utf8", "-c",
+             "import sys; sys.exit(1) if sys.version_info[:2] != (3, 11) else print(sys.executable)"]
+
+    def compatible(path, args=()):
+        try:
+            result = subprocess.run([str(path), *args, *probe], cwd=Path(sys.executable).parent,
+                                    capture_output=True, timeout=10, check=True)
+            return external(result.stdout.decode("utf-8").strip(), "Agent Python 3.11")
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    if override:
+        path = external(override, "Agent Python 3.11")
+        selected = compatible(path)
+        if not selected:
+            raise PaperError(f"Agent DOCX bytecode requires Python 3.11; check MMW_DOCX_AGENT_PYTHON: {path}")
+        return selected
+
+    candidates = [bundled / "python" / ("python" + extension), Path(sys.executable)]
+    candidates.extend(find_tool("MMW_DOCX_AGENT_PYTHON", name) for name in ("python3.11", "python3", "python"))
+    for candidate in dict.fromkeys(candidate for candidate in candidates if candidate):
+        if Path(candidate).is_file():
+            selected = compatible(external(candidate, "Agent Python"))
+            if selected:
+                return selected
+    launcher = find_tool("MMW_DOCX_AGENT_PYTHON", "py") if os.name == "nt" else None
+    if launcher:
+        selected = compatible(external(launcher, "Windows Python launcher"), ("-3.11",))
+        if selected:
+            return selected
+    raise PaperError("Agent DOCX bytecode needs Python 3.11. Set MMW_DOCX_AGENT_PYTHON to its absolute executable path.")
 
 
-def run_tool(label, argv, cwd, *, timeout, input_data=None):
+def agent_runtime(root, args):
+    config = {}
+    config_path = root / AGENT_CONFIG
+    if not args.agent_app and (config_path.exists() or config_path.is_symlink()):
+        config = json.loads(read_checked(root, AGENT_CONFIG, 16 * 1024))
+        if not isinstance(config, dict):
+            raise PaperError(f"{AGENT_CONFIG} must contain an object.")
+    packaged = Path(__file__).resolve().parents[1] / "docx-agent"
+    value = args.agent_app or os.environ.get("MMW_DOCX_AGENT_APP") or config.get("agentApp") or packaged
+
+    def external(value, label, *, directory=False):
+        if not isinstance(value, (str, Path)) or not Path(value).is_absolute():
+            raise PaperError(f"{label} must be an absolute local path.")
+        path = Path(value).resolve()
+        if path.is_relative_to(root) or str(path).startswith(("\\\\", "//")):
+            raise PaperError(f"{label} must be installed locally outside the modeling workspace.")
+        if not (path.is_dir() if directory else path.is_file()):
+            raise PaperError(f"Missing {label}: {path}")
+        return path
+
+    app = external(value, "Agent resources/app", directory=True)
+    bundled = app.parent.parent / "runtime"
+    extension = ".exe" if os.name == "nt" else ""
+    python_override = os.environ.get("MMW_DOCX_AGENT_PYTHON") or config.get("python")
+    python = resolve_agent_python(python_override, bundled, extension, external)
+    if os.environ.get("MMW_NODE"):
+        node_value = os.environ["MMW_NODE"]
+    else:
+        node_value = config.get("node") or find_tool("MMW_NODE", "node", (
+            bundled / "node" / ("node" + extension), bundled / "node" / "bin" / ("node" + extension),
+        ))
+    if not node_value:
+        raise PaperError("Install Node.js or set MMW_NODE to the actual absolute node executable path.")
+    node = external(node_value, "Node executable")
+    if node.name.casefold() != ("node" + extension):
+        raise PaperError("The Agent exporter requires a plain node executable named node or node.exe.")
+    pandoc = find_tool("MMW_PANDOC", "pandoc", (bundled / "pandoc" / ("pandoc" + extension),))
+    if not pandoc:
+        raise PaperError("Install Pandoc for independent Markdown checks or set MMW_PANDOC to its absolute executable path.")
+    pandoc = external(pandoc, "Pandoc executable")
+    tools = app / "tools"
+    engine = external(tools / "docx-cn-engine", "Agent docx-cn-engine", directory=True)
+    external(engine / "md_to_docx.js", "Agent Node engine entry point")
+    profile = external(tools / "docx_style_profiles" / f"competition_{args.language}.json", "Agent competition profile")
+
+    def original_tool(name):
+        source = tools / f"{name}.py"
+        return external(source if source.is_file() else tools / f"{name}.pyc", f"Agent {name}")
+
+    filler = original_tool("docx_template_fill") if (root / TEMPLATE_MAP).exists() else None
+    return AgentRuntime(app, str(python), str(node), str(pandoc), original_tool("docx_precheck"),
+                        original_tool("docx_export"), profile, engine, filler)
+
+
+def run_tool(label, argv, cwd, *, timeout, input_data=None, env=None, with_stderr=False):
     try:
         result = subprocess.run(
             argv, cwd=cwd, input=input_data, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, timeout=timeout, shell=False,
+            stderr=subprocess.PIPE, timeout=timeout, shell=False, env=env,
         )
     except subprocess.TimeoutExpired:
         raise PaperError(f"{label} timed out after {timeout} seconds.") from None
@@ -180,7 +309,7 @@ def run_tool(label, argv, cwd, *, timeout, input_data=None):
     if result.returncode:
         detail = (result.stderr or result.stdout).decode("utf-8", "replace").strip()
         raise PaperError(f"{label} failed ({result.returncode}): {detail[-2200:]}")
-    return result.stdout
+    return (result.stdout, result.stderr) if with_stderr else result.stdout
 
 
 def nodes(obj):
@@ -273,7 +402,9 @@ def sanitized_blocks(tree, lines):
     for node in nodes(tree["blocks"]):
         tag = node["t"]
         if tag in {"RawInline", "RawBlock"} and not comment_only(node):
-            raise PaperError("Raw HTML, LaTeX, and converter-specific blocks are unsupported. Use Markdown and $…$ math.")
+            kind, raw = node["c"]
+            if tag != "RawInline" or kind != "html" or not SUP_SUB.fullmatch(raw):
+                raise PaperError("Use Markdown, supported inline superscripts/subscripts, and $…$ math instead of raw HTML or LaTeX blocks.")
         if tag in {"Para", "Plain", "Header"}:
             text = prose(node)
             match = LATEX_COMMAND.search(text) or PLACEHOLDER.search(text) or PARSE_ERROR.search(text)
@@ -449,13 +580,20 @@ def precheck(root, pandoc, scratch, *, summary_sheet=False):
     text = data.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
     if "\x00" in text:
         raise PaperError(f"Unexpected NUL character in {SOURCE}.")
+    lines = text.split("\n")
+    # The original engine accepts and omits an optional front matter header.
+    # Mask it for source validation without changing the line numbers.
+    frontmatter = FRONTMATTER.match(text)
+    validation_text = "\n" * frontmatter.group().count("\n") + text[frontmatter.end():] if frontmatter else text
     parsed = run_tool(
         "Pandoc Markdown precheck",
         [pandoc, "--sandbox", "--fail-if-warnings", "--from", READER, "--to", "json"],
-        scratch, timeout=30, input_data=text.encode("utf-8"),
+        scratch, timeout=30, input_data=validation_text.encode("utf-8"),
     )
     tree = json.loads(parsed)
-    title_nodes, table_labels = sanitized_blocks(tree, text.split("\n"))
+    image_positions = {id(node): dict(attrs_of(node)[2]).get("data-pos", "")
+                       for node in nodes(tree["blocks"]) if node["t"] == "Image"}
+    title_nodes, table_labels = sanitized_blocks(tree, lines)
     blocks = tree["blocks"]
     headings = [node for node in nodes(blocks) if node["t"] == "Header" and node["c"][0] == 1]
     if (
@@ -518,11 +656,20 @@ def precheck(root, pandoc, scratch, *, summary_sheet=False):
         raise PaperError("Provide exactly one nonempty References / 参考文献 section.")
 
     figure_digests = {}
+    image_lines = {}
     counts = {"equations": 0, "images": 0, "tables": 0}
     for node in emitted_nodes(blocks):
         tag = node["t"]
         if tag == "Image":
             relative = figure_path(root, node["c"][2][0])
+            number = image_positions[id(node)].split(":", 1)[0]
+            if not number.isdecimal() or not 0 < int(number) <= len(lines):
+                raise PaperError("Could not locate the source line for a Markdown figure.")
+            index = int(number) - 1
+            image = AGENT_IMAGE.fullmatch(lines[index].strip())
+            if index in image_lines or not image:
+                raise PaperError(f"Put each figure on its own line as ![caption](figures/file.png), line {number}.")
+            image_lines[index] = (relative, image.group(1))
             node["c"][2][0] = relative
             if relative not in figure_digests:
                 image = read_checked(root, relative, FIGURE_MAX)
@@ -545,7 +692,8 @@ def precheck(root, pandoc, scratch, *, summary_sheet=False):
             body_tables += 1
             body_table_ids.extend(table_labels.get(id(node), ()))
     return Paper(
-        tree, digest(data), figure_digests, {
+        lines, digest(data), figure_digests, image_lines, prose(headings[0]),
+        next(prose(heading) for kind, heading, _ in sections if kind != "abstract"), {
             "body_chars": len(prose([item for item in body_blocks if not NO_AI_STATEMENT.fullmatch(prose(item))])),
             "figures": list(figure_digests),
             "body_figures": list(dict.fromkeys(body_figures)),
@@ -556,254 +704,220 @@ def precheck(root, pandoc, scratch, *, summary_sheet=False):
     )
 
 
-def stage_figures(root, paper, scratch):
+def stage_paper(root, paper, scratch, runtime):
+    figures = scratch / "figures"
+    figures.mkdir()
     staged = {}
     for index, (relative, expected) in enumerate(paper.figure_digests.items(), start=1):
         image = read_checked(root, relative, FIGURE_MAX)
         if digest(image) != expected:
             raise PaperError(f"Figure changed after precheck: {relative}")
         suffix = Path(relative).suffix.lower()
-        name = f"figure-{index}{suffix}"
-        (scratch / name).write_bytes(image)
+        name = f"mmw-image-{index}{suffix}"
+        (figures / name).write_bytes(image)
         if suffix == ".pdf":
-            pdftoppm = require_tool("MMW_PDFTOPPM", "pdftoppm")
-            prefix = f"raster-{index}"
-            run_tool(
-                f"Rasterizing {relative}",
-                [pdftoppm, "-f", "1", "-l", "2", "-r", "180", "-scale-to", "1800", "-png", name, prefix],
-                scratch, timeout=30,
-            )
-            rasters = list(scratch.glob(f"{prefix}-*.png"))
-            if len(rasters) != 1:
-                raise PaperError(f"Expected a single-page PDF figure: {relative}")
-            name = rasters[0].name
-            validate_figure(name, rasters[0].read_bytes())
-        staged[relative] = name
-    for node in nodes(paper.tree["blocks"]):
-        if node["t"] == "Image":
-            relative = node["c"][2][0]
-            if relative not in staged:
-                raise PaperError("Nested images inside image alternative text are unsupported.")
-            node["c"][2][0] = staged[relative]
+            pdftoppm = find_tool("MMW_PDFTOPPM", "pdftoppm")
+            prefix = f"mmw-raster-{index}"
+            if pdftoppm:
+                run_tool(
+                    f"Rasterizing {relative}",
+                    [pdftoppm, "-f", "1", "-l", "2", "-r", "180", "-scale-to", "1800", "-png", name, prefix],
+                    figures, timeout=30,
+                )
+                rasters = list(figures.glob(f"{prefix}-*.png"))
+                if len(rasters) != 1:
+                    raise PaperError(f"Expected a single-page PDF figure: {relative}")
+                name = rasters[0].name
+            else:
+                # Agent includes PyMuPDF. Keep the same extent bound as Poppler.
+                output = f"{prefix}.png"
+                run_tool(
+                    f"Rasterizing {relative} with Agent PyMuPDF",
+                    [runtime.python, "-I", "-X", "utf8", "-c", PDF_RASTER_SCRIPT, name, output],
+                    figures, timeout=30, env=runtime.environment(),
+                )
+                name = output
+            validate_figure(name, read_checked(scratch, f"figures/{name}", FIGURE_MAX))
+        staged[relative] = f"figures/{name}"
+
+    lines = paper.lines.copy()
+    for index, (relative, caption) in paper.image_lines.items():
+        lines[index] = f"![{caption}]({staged[relative]})"
+    markdown = "\n".join(lines)
+    # Table and figure manifest comments were captured from the canonical AST.
+    # Agent precheck removes non-code comments, and the Node engine omits them.
+    chunks = re.split(r"(```[\s\S]*?```)", markdown)
+    markdown = "".join(
+        chunk if index % 2 else re.sub(r"<!--[\s\S]*?-->", lambda match: "\n" * match.group().count("\n"), chunk)
+        for index, chunk in enumerate(chunks)
+    )
+    assert_staged_images(markdown, staged.values())
+    source = scratch / SOURCE
+    source.parent.mkdir()
+    source.write_bytes(markdown.encode("utf-8"))
+    return source, staged
 
 
-def style_paper(raw, styled, language, *, summary_sheet=False):
+PDF_RASTER_SCRIPT = """
+import fitz
+import sys
+with fitz.open(sys.argv[1]) as doc:
+    if doc.page_count != 1:
+        raise ValueError("Expected a single-page PDF figure")
+    page = doc[0]
+    zoom = min(180 / 72, 1800 / max(page.rect.width, page.rect.height))
+    page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False).save(sys.argv[2])
+"""
+
+
+def assert_staged_images(markdown, staged_paths):
+    allowed = set(staged_paths)
+    # The Agent's PDF scanner looks for image syntax even in comments and code.
+    # Permit those literals only where they cannot escape the staging directory.
+    for image in AGENT_IMAGE.finditer(markdown):
+        value = image.group(2).strip().split(" ", 1)[0]
+        if value in allowed:
+            continue
+        if (
+            not value or value.startswith(("/", "\\")) or re.search(r"[:\\\x00-\x1f]", value)
+            or any(part == ".." or (os.name == "nt" and part.endswith((" ", ".")) and part != ".")
+                   for part in value.split("/"))
+        ):
+            raise PaperError("An image reference outside the validated paper figures uses an unsafe staging path.")
+
+
+def original_precheck(runtime, scratch, source, staged):
+    report = scratch / REPORT
+    run_tool(
+        "Agent DOCX precheck",
+        [runtime.python, "-I", "-X", "utf8", str(runtime.precheck), "--source", str(source),
+         "--workspace", str(scratch), "--report", str(report), "--fail-on-fatal"],
+        scratch, timeout=60, env=runtime.environment(),
+    )
+    repaired = read_checked(scratch, SOURCE, SOURCE_MAX)
+    assert_staged_images(repaired.decode("utf-8"), staged.values())
+    # Agent may normalize its staged copy (for example, a valid one-line
+    # display equation). Word output is still checked against the canonical AST.
+    return read_checked(scratch, REPORT, SOURCE_MAX)
+
+
+@dataclass
+class CustomTemplate:
+    path: str
+    data: bytes
+    mapping: bytes
+    counts: dict[str, int]
+
+    def fingerprint(self):
+        return {"path": self.path, "sha256": digest(self.data), "map_sha256": digest(self.mapping)}
+
+
+def custom_template(root):
+    map_path = checked_path(root, TEMPLATE_MAP, missing=True)
+    if not map_path.exists():
+        return None
+    mapping = read_checked(root, TEMPLATE_MAP, SOURCE_MAX)
+    config = json.loads(mapping)
+    if not isinstance(config, dict):
+        raise PaperError(f"{TEMPLATE_MAP} must be a template anchor object.")
+    anchor_values = [config.get(f"{name}_anchor_para_idx") for name in TEMPLATE_KEYS]
+    indices = [value for value in anchor_values if value is not None]
+    deleted = config.get("delete_paragraph_indices", [])
+    if (any(value is None for value in anchor_values[:4]) or not isinstance(deleted, list)
+            or any(type(value) is not int or value < 0 for value in indices + deleted)
+            or len(set(indices)) != len(indices) or set(indices) & set(deleted)
+            or config.get("body_anchor_mode", "delete") not in {"keep", "delete"}):
+        raise PaperError(f"{TEMPLATE_MAP} has missing, invalid, or conflicting paragraph anchors.")
+    user_data = checked_path(root, "user_data", directory=True)
+    files = sorted(candidate.name for candidate in user_data.iterdir()
+                   if candidate.suffix.lower() in {".docx", ".dotx"} and not candidate.name.startswith("~$"))
+    if len(files) != 1:
+        raise PaperError(f"{TEMPLATE_MAP} requires exactly one .docx or .dotx template in user_data/.")
+    relative = f"user_data/{files[0]}"
+    data = read_checked(root, relative, OUTPUT_MAX)
+    counts = package_counts(data)
+    return CustomTemplate(relative, data, mapping, counts)
+
+
+def template_fingerprint(template):
+    return template.fingerprint() if template else None
+
+
+TEMPLATE_FILL_SCRIPT = """
+import importlib.util
+import runpy
+import shutil
+import sys
+
+exporter, filler = sys.argv[1:3]
+name = '_mh_tools_docx_export_fill_view'
+spec = importlib.util.spec_from_file_location(name, exporter)
+module = importlib.util.module_from_spec(spec)
+sys.modules[name] = module
+spec.loader.exec_module(module)
+# The original filler checks for node_modules immediately beside its JS entry.
+# Node resolves bundled dependencies through the enclosing plugin directory.
+module._is_node_engine_available = lambda: bool(shutil.which('node'))
+sys.argv = [filler, *sys.argv[3:]]
+runpy.run_path(filler, run_name='__main__')
+"""
+
+
+def template_export(runtime, template, scratch, source, raw):
+    target = scratch / ("template" + Path(template.path).suffix.lower())
+    target.write_bytes(template.data)
+    (scratch / TEMPLATE_MAP).write_bytes(template.mapping)
+    env = runtime.environment()
+    env.update({"TEMP": str(scratch), "TMP": str(scratch), "TMPDIR": str(scratch)})
+    _, log = run_tool(
+        "Agent DOCX template fill",
+        [runtime.python, "-I", "-X", "utf8", "-c", TEMPLATE_FILL_SCRIPT, str(runtime.exporter),
+         str(runtime.filler), "--template", str(target), "--source", str(source), "--output", str(raw),
+         "--profile", str(runtime.profile), "--workspace", str(scratch)],
+        scratch, timeout=140, env=env, with_stderr=True,
+    )
+    return log
+
+
+def apply_summary_break(raw, first_heading, template=None):
     from docx import Document
-    from docx.enum.style import WD_STYLE_TYPE
-    from docx.enum.text import WD_ALIGN_PARAGRAPH as Align
-    from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
-    from docx.shared import Cm, Pt, RGBColor
-    from docx.text.paragraph import Paragraph
 
     doc = Document(raw)
-    chinese = language == "zh"
-    latin, cjk, display, code = "Times New Roman", "SimSun", "SimHei", "Consolas"
-    normal_size, table_size = (12, 10.5) if chinese else (11, 10)
-    line_spacing = 1.5 if chinese else 1.15
-    size_by_level = [15, 14, 12, 11] if chinese else [14, 12, 11, 11]
-
-    def child(parent, tag):
-        item = parent.find(qn(tag))
-        if item is None:
-            item = OxmlElement(tag)
-            parent.append(item)
-        return item
-
-    def fonts(obj, size, family=latin, east_asia=cjk):
-        obj.font.name = family
-        obj.font.size = Pt(size)
-        obj.font.color.rgb = RGBColor(0, 0, 0)
-        rpr = obj._element.get_or_add_rPr()
-        rfonts = rpr.rFonts
-        for attr in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme", "csTheme"):
-            rfonts.attrib.pop(qn(f"w:{attr}"), None)
-        rfonts.set(qn("w:eastAsia"), east_asia)
-        rfonts.set(qn("w:cs"), family)
-        lang = child(rpr, "w:lang")
-        lang.set(qn("w:val"), "zh-CN" if chinese else "en-US")
-        lang.set(qn("w:eastAsia"), "zh-CN")
-
-    def set_style(name, size, *, family=latin, east_asia=cjk, alignment=None, bold=None,
-                  indent=0, spacing=None, before=0, after=0, keep_next=False):
-        if name not in doc.styles:
-            doc.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
-        sty = doc.styles[name]
-        if name != "Normal":
-            sty.base_style = doc.styles["Normal"]
-        fonts(sty, size, family, east_asia)
-        sty.font.bold = bold
-        sty.font.italic = None
-        fmt = sty.paragraph_format
-        fmt.alignment = alignment
-        fmt.first_line_indent = Pt(indent)
-        fmt.line_spacing = spacing or line_spacing
-        fmt.space_before = Pt(before)
-        fmt.space_after = Pt(after)
-        fmt.keep_with_next = keep_next
-        fmt.widow_control = True
-        return sty
-
-    set_style("Footer", 10, alignment=Align.CENTER, spacing=1.0)
-    for section in doc.sections:
-        section.page_width, section.page_height = Cm(21), Cm(29.7)
-        section.top_margin = section.bottom_margin = section.left_margin = section.right_margin = Cm(2.5)
-        section.footer_distance = Cm(1.25)
-        footer = section.footer.paragraphs[0]
-        footer.style = doc.styles["Footer"]
-        footer.alignment = Align.CENTER
-        footer.paragraph_format.first_line_indent = Pt(0)
-        field = OxmlElement("w:fldSimple")
-        field.set(qn("w:instr"), "PAGE")
-        footer._p.append(field)
-
-    for name in ("Normal", "Body Text", "First Paragraph", "Compact"):
-        set_style(name, normal_size, alignment=Align.JUSTIFY, indent=24 if chinese else 0, after=0 if chinese else 6)
-    set_style("Title", 18 if chinese else 16, east_asia=display if chinese else cjk,
-              alignment=Align.CENTER, bold=True, spacing=1.15, before=12, after=8, keep_next=True)
-    for level in range(1, 9):
-        set_style(f"Heading {level}", size_by_level[min(level - 1, 3)],
-                  alignment=Align.CENTER if chinese and level == 1 else Align.LEFT,
-                  east_asia=display if chinese else cjk, bold=True, spacing=1.15,
-                  before=10, after=5, keep_next=True)
-    for name in ("Caption", "Image Caption", "Table Caption"):
-        set_style(name, table_size, alignment=Align.CENTER, bold=True,
-                  after=5, before=3, spacing=1.1, keep_next=name == "Table Caption")
-    for name in ("Figure", "Captioned Figure"):
-        set_style(name, table_size, alignment=Align.CENTER, after=3, spacing=1.0, keep_next=name == "Captioned Figure")
-    set_style("Source Code", 9, family=code, alignment=Align.LEFT, spacing=1.0, before=3, after=3)
-    set_style("Block Text", normal_size, indent=0, after=3)
-    reference_style = set_style("MMW Reference", table_size, alignment=Align.LEFT, spacing=1.15, after=2)
-    reference_style.paragraph_format.left_indent = Cm(0.74)
-    reference_style.paragraph_format.first_line_indent = -Cm(0.74)
-    set_style("MMW Equation", normal_size, alignment=Align.CENTER, spacing=1.15, before=3, after=3)
-    set_style("MMW Equation Number", normal_size, alignment=Align.RIGHT, spacing=1.15)
-    set_style("MMW Table Text", table_size, alignment=Align.CENTER, spacing=1.15)
-    set_style("Footer", 10, alignment=Align.CENTER, spacing=1.0)
-
-    # The first Markdown heading is the paper title. Promote remaining Markdown
-    # headings one level to make the Word navigation hierarchy start at Heading 1.
-    in_references = False
-    first_heading = True
-    summary_ended = False
-    previous_equation = False
-    for paragraph in doc.paragraphs:
-        name = paragraph.style.name
-        text = paragraph.text.strip()
-        pf = paragraph.paragraph_format
-        match = re.fullmatch(r"Heading ([1-9])", name)
-        has_math_block = bool(paragraph._p.xpath(".//m:oMathPara"))
-        if match:
-            level = int(match.group(1))
-            if first_heading and level == 1:
-                paragraph.style = doc.styles["Title"]
-                first_heading = False
-            else:
-                paragraph.style = doc.styles[f"Heading {max(1, level - 1)}"]
-                if level == 2:
-                    kind = heading_kind(text)
-                    in_references = kind == "references"
-                    if summary_sheet and not summary_ended and kind != "abstract":
-                        pf.page_break_before = True
-                        summary_ended = True
-                    if kind in {"abstract", "toc"}:
-                        pf.alignment = Align.CENTER
-                pf.keep_with_next = True
-        elif name == "Source Code":
-            shade = child(paragraph._p.get_or_add_pPr(), "w:shd")
-            shade.set(qn("w:fill"), "F5F5F5")
-        elif has_math_block:
-            paragraph.style = doc.styles["MMW Equation"]
-        elif paragraph._p.xpath(".//w:drawing") and not text:
-            paragraph.alignment = Align.CENTER
-            pf.first_line_indent = Pt(0)
-            pf.keep_together = True
-        elif previous_equation and re.fullmatch(r"[（(]\s*[\d.\-]+\s*[)）]", text):
-            paragraph.style = doc.styles["MMW Equation Number"]
-        elif is_table_caption(text):
-            paragraph.style = doc.styles["Table Caption"]
-        elif in_references and text and not paragraph._p.xpath("./w:pPr/w:numPr"):
-            paragraph.style = reference_style
-        if paragraph._p.xpath("./w:pPr/w:numPr"):
-            # The Word numbering definition supplies the list's hanging indent.
-            if chinese:
-                paragraph.style = doc.styles["Compact"]
-            pf.first_line_indent = None
-        previous_equation = has_math_block
-
-    def border(parent, edge, value, size=None):
-        element = child(parent, f"w:{edge}")
-        element.set(qn("w:val"), value)
-        if size is not None:
-            element.set(qn("w:sz"), str(size))
-            element.set(qn("w:color"), "000000")
-
-    for table in doc.element.body.xpath(".//w:tbl"):
-        tbl_pr = table.find(qn("w:tblPr"))
-        if tbl_pr is None:
-            continue
-        for name in ("w:tblBorders", "w:tblStyle"):
-            old = tbl_pr.find(qn(name))
-            if old is not None:
-                tbl_pr.remove(old)
-        borders = OxmlElement("w:tblBorders")
-        # OOXML element order matters: insert borders ahead of the layout/cell props.
-        following = next((item for item in tbl_pr if item.tag in {
-            qn("w:shd"), qn("w:tblLayout"), qn("w:tblCellMar"), qn("w:tblLook"),
-        }), None)
-        if following is None:
-            tbl_pr.append(borders)
-        else:
-            following.addprevious(borders)
-        for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-            border(borders, edge, "single", 12) if edge in {"top", "bottom"} else border(borders, edge, "nil")
-        for row in table.findall(qn("w:tr")):
-            tr_pr = row.find(qn("w:trPr"))
-            header = tr_pr is not None and tr_pr.find(qn("w:tblHeader")) is not None
-            for cell in row.findall(qn("w:tc")):
-                if header:
-                    cell_pr = cell.get_or_add_tcPr()
-                    border(cell_pr.get_or_add_tcBorders() if hasattr(cell_pr, "get_or_add_tcBorders")
-                           else child(cell_pr, "w:tcBorders"), "bottom", "single", 6)
-                for element in cell.findall(qn("w:p")):
-                    paragraph = Paragraph(element, doc._body)
-                    if paragraph.style.name != "Source Code":
-                        paragraph.style = doc.styles["MMW Table Text"]
-                    if header:
-                        for run in paragraph.runs:
-                            if run.bold is None:
-                                run.bold = True
-
-    for shape in doc.inline_shapes:
-        if shape.width > Cm(14):
-            scale = Cm(14) / shape.width
-            shape.height = round(shape.height * scale)
-            shape.width = Cm(14)
-        if shape.height > Cm(21):
-            scale = Cm(21) / shape.height
-            shape.width = round(shape.width * scale)
-            shape.height = Cm(21)
-    doc.core_properties.language = "zh-CN" if chinese else "en-US"
-    doc.core_properties.author = ""
-    doc.core_properties.last_modified_by = ""
-    doc.core_properties.title = next((p.text for p in doc.paragraphs if p.style.name == "Title"), "")
-    doc.save(styled)
+    heading = next((p for p in doc.paragraphs if normalized_text(p.text) == normalized_text(first_heading)
+                    and (template or (p.style is not None and p.style.name == "Heading 2"))), None)
+    if heading is None:
+        raise PaperError(f"DOCX is missing the heading after the Summary Sheet: {first_heading}")
+    if heading.paragraph_format.page_break_before:
+        return
+    style = heading.style
+    while style is not None:
+        if style.paragraph_format.page_break_before:
+            return
+        style = style.base_style
+    previous = heading._p.getprevious()
+    if previous is not None and previous.tag == qn("w:p") and (
+        previous.xpath(".//w:br[@w:type='page']") or previous.xpath("./w:pPr/w:sectPr")
+    ):
+        return
+    heading.paragraph_format.page_break_before = True
+    doc.save(raw)
 
 
-def inspect_docx(data, expected):
-    from docx import Document
+def normalized_text(text):
+    mapped = unicodedata.normalize("NFKC", text).translate(str.maketrans("‘’“”", "''\"\""))
+    return " ".join(mapped.split())
+
+def package_counts(data):
     from lxml import etree
 
-    doc = Document(io.BytesIO(data))
-    if not doc.sections or not any(p.style.name == "Title" and p.text.strip() for p in doc.paragraphs):
-        raise PaperError("DOCX could not be reopened with its paper title and page layout.")
     namespaces = {
         "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
         "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
         "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
         "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     }
-    counts = dict.fromkeys(expected, 0)
+    counts = dict.fromkeys(("equations", "images", "tables"), 0)
     xml = etree.XMLParser(resolve_entities=False, no_network=True)
     with zipfile.ZipFile(io.BytesIO(data)) as package:
         names = package.namelist()
@@ -826,10 +940,40 @@ def inspect_docx(data, expected):
             content = etree.fromstring(package.read(name), xml)
             counts["equations"] += len(content.xpath(".//m:oMath", namespaces=namespaces))
             counts["images"] += len(content.xpath(".//a:blip[@r:embed]", namespaces=namespaces))
-            counts["tables"] += len(content.xpath(".//w:tbl", namespaces=namespaces))
-    if counts != expected:
-        raise PaperError(f"DOCX content counts do not match Markdown. Expected {expected}. Reopened {counts}.")
+            # The original engine uses a borderless, single-row, three-cell
+            # table for each centered display equation and its equation number.
+            counts["tables"] += len(content.xpath(
+                ".//w:tbl[not(count(w:tr)=1 and count(w:tr/w:tc)=3 and w:tr/w:tc[2]//m:oMath"
+                " and w:tblPr/w:tblBorders/w:top/@w:val='none' and not(w:tr/w:trPr/w:tblHeader))]",
+                namespaces=namespaces,
+            ))
+            for equation in content.xpath(".//m:oMath", namespaces=namespaces):
+                text = "".join(equation.xpath(".//m:t/text()", namespaces=namespaces))
+                if PARSE_ERROR.search(text) or LATEX_COMMAND.search(text) or INLINE_TAG.search(text):
+                    raise PaperError(f"Agent DOCX contains unconverted math: {text[:120]}")
     return counts
+
+
+def inspect_docx(data, paper, template=None):
+    from docx import Document
+
+    if len(data) < 10000:
+        raise PaperError("Agent DOCX output is smaller than the original 10 KB minimum.")
+    counts = package_counts(data)
+    expected = paper.counts
+    if template:
+        expected = {key: count + template.counts[key] for key, count in expected.items()}
+    doc = Document(io.BytesIO(data))
+    paragraphs = [normalized_text(p.text) for p in doc.paragraphs if p.text.strip()]
+    title = normalized_text(paper.title)
+    title_matches = title in (paragraphs if template else paragraphs[:1])
+    if not doc.sections or not title_matches:
+        raise PaperError("DOCX could not be reopened with the expected paper title and page layout.")
+    if len(doc.inline_shapes) < paper.counts["images"]:
+        raise PaperError("DOCX could not be reopened with the expected figures.")
+    if counts != expected:
+        raise PaperError(f"DOCX content counts do not match Markdown and template. Expected {expected}. Reopened {counts}.")
+    return paper.counts
 
 
 def validate_layout(data):
@@ -837,7 +981,7 @@ def validate_layout(data):
         raise PaperError("The layout proof is missing or is not a renderer-generated PDF.")
 
 
-def render_layout(styled, scratch):
+def render_layout(styled, scratch, node):
     extras = []
     if os.name == "nt":
         extras = [Path(os.environ[key]) / "LibreOffice" / "program" / "soffice.exe"
@@ -849,7 +993,6 @@ def render_layout(styled, scratch):
         cli = Path(dsoffice_cli)
         if not cli.is_absolute() or not cli.is_file():
             raise PaperError("MMW_DSOFFICE_CLI must be an absolute path to the LibreOffice Kit CLI script.")
-        node = require_tool("MMW_NODE", "node")
         run_tool(
             "LibreOffice Kit PDF rendering",
             [node, str(cli.resolve(strict=True)), "convert", "--input", str(styled), "--output", str(layout)],
@@ -937,31 +1080,53 @@ def export(root, args, scratch):
     with export_lock(root):
         # The stamp is the commit marker. Invalidate it before any operation
         # which might subsequently fail, including Markdown precheck.
-        checked_path(root, STAMP, missing=True).unlink(missing_ok=True)
-        checked_path(root, OUTPUT, missing=True)
-        checked_path(root, LAYOUT, missing=True)
-        pandoc = require_tool("MMW_PANDOC", "pandoc")
-        paper = precheck(root, pandoc, scratch, summary_sheet=summary_sheet_required(args))
-        stage_figures(root, paper, scratch)
-        raw = scratch / "pandoc.docx"
-        styled = scratch / "layout.docx"
-        run_tool(
-            "Pandoc DOCX export",
-            [pandoc, "--fail-if-warnings", "--data-dir", str(scratch), "--from", "json", "--to", "docx",
-             "--resource-path", str(scratch), "--output", str(raw)],
-            scratch, timeout=60, input_data=json.dumps(paper.tree, ensure_ascii=False).encode("utf-8"),
-        )
-        style_paper(raw, styled, args.language, summary_sheet=summary_sheet_required(args))
-        docx_data = styled.read_bytes()
-        actual = inspect_docx(docx_data, paper.counts)
-        pdf_data = render_layout(styled, scratch).read_bytes() if args.page_limit else None
+        if not args.template_preview:
+            checked_path(root, STAMP, missing=True).unlink(missing_ok=True)
+            checked_path(root, OUTPUT, missing=True)
+            checked_path(root, LAYOUT, missing=True)
+        runtime = agent_runtime(root, args)
+        runtime_stamp = runtime.fingerprint()
+        paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
+        source, staged = stage_paper(root, paper, scratch, runtime)
+        template = custom_template(root)
+        if args.template_preview and template is None:
+            raise PaperError(f"--template-preview requires {TEMPLATE_MAP} and one template in user_data/.")
+        report = run_precheck_report(root, runtime, scratch, source, staged, write=not args.template_preview)
+        raw = scratch / "layout.docx"
+        if template:
+            log = template_export(runtime, template, scratch, source, raw)
+        else:
+            _, log = run_tool(
+                "Agent DOCX export",
+                [runtime.python, "-I", "-X", "utf8", str(runtime.exporter), "--source", str(source),
+                 "--output", str(raw), "--profile", str(runtime.profile), "--workspace", str(scratch),
+                 "--engine", "node"],
+                scratch, timeout=140, env=runtime.environment(), with_stderr=True,
+            )
+        if b"DOCX exported via Node engine:" not in log:
+            raise PaperError("Agent export did not confirm use of the packaged Node DOCX engine.")
+        if summary_sheet_required(args):
+            apply_summary_break(raw, paper.first_body_heading, template)
+        docx_data = read_checked(scratch, raw.name, OUTPUT_MAX)
+        actual = inspect_docx(docx_data, paper, template)
+        if args.template_preview:
+            assert_inputs(root, paper)
+            if template_fingerprint(custom_template(root)) != template.fingerprint():
+                raise PaperError("The template or its map changed during preview. Run export again.")
+            publish(root, TEMPLATE_PREVIEW, docx_data)
+            return {**paper.stats, "counts": actual, "output": TEMPLATE_PREVIEW}
+        pdf_data = render_layout(raw, scratch, runtime.node).read_bytes() if args.page_limit else None
         assert_inputs(root, paper)
+        if runtime.fingerprint() != runtime_stamp or template_fingerprint(custom_template(root)) != template_fingerprint(template):
+            raise PaperError("Agent DOCX runtime, profile, or template changed during export. Run export again.")
         stamp = {
             "version": STAMP_VERSION, "source_sha256": paper.source_digest,
             "figure_sha256": paper.figure_digests, "docx_sha256": digest(docx_data),
+            "agent_runtime": runtime_stamp, "precheck_report_sha256": digest(report),
+            "template": template_fingerprint(template),
             "settings": settings(args), "stats": paper.stats, "counts": actual,
         }
-        result = {**paper.stats, "counts": actual, "output": OUTPUT}
+        result = {**paper.stats, "counts": actual, "output": OUTPUT, "report": REPORT}
         publish(root, OUTPUT, docx_data)
         if pdf_data is not None:
             publish(root, LAYOUT, pdf_data)
@@ -974,22 +1139,24 @@ def export(root, args, scratch):
 
 
 def verify(root, args, scratch):
-    pandoc = require_tool("MMW_PANDOC", "pandoc")
-    paper = precheck(root, pandoc, scratch, summary_sheet=summary_sheet_required(args))
+    runtime = agent_runtime(root, args)
+    paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
+    template = custom_template(root)
     stamp_bytes = read_checked(root, STAMP, 2 * SOURCE_MAX)
     stamp = json.loads(stamp_bytes)
     expected = {
         "version": STAMP_VERSION, "source_sha256": paper.source_digest,
         "figure_sha256": paper.figure_digests, "settings": settings(args),
-        "stats": paper.stats, "counts": paper.counts,
+        "stats": paper.stats, "counts": paper.counts, "agent_runtime": runtime.fingerprint(),
+        "precheck_report_sha256": digest(read_checked(root, REPORT, SOURCE_MAX)), "template": template_fingerprint(template),
     }
     if not isinstance(stamp, dict) or any(stamp.get(key) != value for key, value in expected.items()):
-        raise PaperError("The DOCX export stamp differs from the current Markdown, figures, or settings. Run export again.")
+        raise PaperError("The DOCX export stamp differs from the current Markdown, figures, report, settings, or Agent runtime. Run export again.")
     docx_data = read_checked(root, OUTPUT, OUTPUT_MAX)
     if stamp.get("docx_sha256") != digest(docx_data):
         raise PaperError("paper/main.docx differs from the verified export. Run export again.")
-    actual = inspect_docx(docx_data, paper.counts)
-    result = {**paper.stats, "counts": actual, "output": OUTPUT}
+    actual = inspect_docx(docx_data, paper, template)
+    result = {**paper.stats, "counts": actual, "output": OUTPUT, "report": REPORT}
     if args.page_limit:
         pdf_data = read_checked(root, LAYOUT, OUTPUT_MAX)
         validate_layout(pdf_data)
@@ -1004,18 +1171,16 @@ def verify(root, args, scratch):
     return result
 
 
-def write_report(root, result=None, error=None):
-    if error is None:
-        details = [
-            "# Competition DOCX precheck", "", "Passed for `paper/main.md`.", "",
-            f"- Body characters: {result['body_chars']}",
-            f"- Figures: {len(result['figures'])} ({len(result['body_figures'])} in the body)",
-            f"- Body tables: {result['tables']}",
-        ]
-        if result["figures"]:
-            details += ["", "Figure files:", *[f"- {item}" for item in result["figures"]]]
-    else:
-        details = ["# Competition DOCX precheck", "", "Failed for `paper/main.md`.", "", str(error)]
+def run_precheck_report(root, runtime, scratch, source, staged, *, write):
+    try:
+        return original_precheck(runtime, scratch, source, staged)
+    finally:
+        if write and (scratch / REPORT).is_file():
+            publish(root, REPORT, read_checked(scratch, REPORT, SOURCE_MAX))
+
+
+def write_error_report(root, error):
+    details = ["# Competition DOCX precheck", "", "Failed for `paper/main.md`.", "", str(error)]
     publish(root, REPORT, ("\n".join(details) + "\n").encode("utf-8"))
 
 
@@ -1034,22 +1199,33 @@ def main(argv=None):
         parser.add_argument("--language", required=True, choices=("zh", "en"))
         parser.add_argument("--competition", required=True)
         parser.add_argument("--page-limit", type=int, default=0)
+        parser.add_argument("--agent-app", help="absolute path to the Agent DOCX assets directory")
+        parser.add_argument("--template-preview", action="store_true", help=f"write {TEMPLATE_PREVIEW} only")
         parser.add_argument("--report", action="store_true", help=f"write {REPORT} after precheck")
         args = parser.parse_args(argv)
         if args.page_limit < 0:
             raise PaperError("--page-limit must be a nonnegative integer.")
         if args.report and args.operation != "precheck":
             raise PaperError("--report is only available for precheck.")
+        if args.template_preview and args.operation != "export":
+            raise PaperError("--template-preview is only available for export.")
         root = workspace_root(args.workspace)
         # Staging contains generated filenames only. Never run converters from
         # the paper directory or hand them workspace-controlled path arguments.
         with tempfile.TemporaryDirectory(prefix="mmw-docx-") as temp:
             scratch = Path(temp).resolve(strict=True)
             if args.operation == "precheck":
-                pandoc = require_tool("MMW_PANDOC", "pandoc")
-                result = precheck(root, pandoc, scratch, summary_sheet=summary_sheet_required(args)).stats
-                if args.report:
-                    write_report(root, result=result)
+                try:
+                    runtime = agent_runtime(root, args)
+                    paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
+                    source, staged = stage_paper(root, paper, scratch, runtime)
+                    run_precheck_report(root, runtime, scratch, source, staged, write=args.report)
+                    assert_inputs(root, paper)
+                    result = paper.stats
+                except Exception as exc:
+                    if args.report and not (scratch / REPORT).is_file():
+                        write_error_report(root, str(exc) or type(exc).__name__)
+                    raise
             elif args.operation == "export":
                 result = export(root, args, scratch)
             else:
@@ -1058,11 +1234,6 @@ def main(argv=None):
         message = str(exc) or type(exc).__name__
         if isinstance(exc, ImportError):
             message = f"DOCX runtime dependency is unavailable: {message}. Install python-docx, lxml and Pillow."
-        if root is not None and args.operation == "precheck" and args.report:
-            try:
-                write_report(root, error=message)
-            except (OSError, PaperError) as report_error:
-                message += f" Report could not be written: {report_error}."
         print(json.dumps({"ok": False, "error": message}, ensure_ascii=True))
         return 1
     print(json.dumps({"ok": True, **result}, ensure_ascii=True))

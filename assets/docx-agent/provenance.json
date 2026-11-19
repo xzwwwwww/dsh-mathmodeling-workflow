@@ -1,0 +1,81 @@
+{
+  "source": "Modex-MH-Agent-backup-20260722-212134/resources/app",
+  "files": {
+    "assets/docx-agent/tools/analyze_docx.pyc": {
+      "original": "tools/analyze_docx.pyc",
+      "sha256": "297c5eb49b119daaf87e272f8041cca5bcfc0fbf7739175cc5ca653d724c6603"
+    },
+    "assets/docx-agent/tools/derive_reference_from_docx.py": {
+      "original": "tools/derive_reference_from_docx.py",
+      "sha256": "ed9a747c41e0b6fdeb669e2906ab21d49600d300c997454defe2763e6a9ae51e"
+    },
+    "assets/docx-agent/tools/docx-cn-engine/latex_to_omml.js": {
+      "original": "tools/docx-cn-engine/latex_to_omml.js",
+      "sha256": "f40f2a6e16ad013318f76cd0a2eab3aa81dbd8464dcd66efbba37d5581e28ddc"
+    },
+    "assets/docx-agent/tools/docx-cn-engine/mathml-to-docx.js": {
+      "original": "tools/docx-cn-engine/mathml-to-docx.js",
+      "sha256": "c5443af87cf499573963b46b4b948882451ef65bde965307af4f7b08c2f77f28"
+    },
+    "assets/docx-agent/tools/docx-cn-engine/md_to_docx.js": {
+      "original": "tools/docx-cn-engine/md_to_docx.js",
+      "sha256": "5c4f40fd869717a9485b5f57d1b8832058ba1c3abea98a140a7568af51ceb6c0"
+    },
+    "assets/docx-agent/tools/docx-cn-engine/omml_helper.pyc": {
+      "original": "tools/docx-cn-engine/omml_helper.pyc",
+      "sha256": "f68f88499467a3e5b9d01bfaa32664269b0a010fd496c645388292afdf393d87"
+    },
+    "assets/docx-agent/tools/docx-cn-engine/package.json": {
+      "original": "tools/docx-cn-engine/package.json",
+      "sha256": "5c4d7f201b34e034415f1a64ea329112d706803cc00558f501959774cfd1d5b8"
+    },
+    "assets/docx-agent/tools/docx_export.pyc": {
+      "original": "tools/docx_export.pyc",
+      "sha256": "0abf622e0660474ef5078fdbde633878f99f59eea407161d6d256f3f2c6b3be5"
+    },
+    "assets/docx-agent/tools/docx_precheck.pyc": {
+      "original": "tools/docx_precheck.pyc",
+      "sha256": "c6bc32a668391765582b0342d9fc9c34ab1843d12c5dd835a15fb2c59f01a414"
+    },
+    "assets/docx-agent/tools/docx_style_profiles/competition_en.json": {
+      "original": "tools/docx_style_profiles/competition_en.json",
+      "sha256": "cbd715898de4a0d5f87bcb144b5635602675466e74216851a7d1a7e00c4a921d"
+    },
+    "assets/docx-agent/tools/docx_style_profiles/competition_zh.json": {
+      "original": "tools/docx_style_profiles/competition_zh.json",
+      "sha256": "0420a0549a1bb6bacabf203be4882143ec688d98b0135d606a7de935f878f707"
+    },
+    "assets/docx-agent/tools/docx_template_analyze.pyc": {
+      "original": "tools/docx_template_analyze.pyc",
+      "sha256": "148a4e0fa33301dc196ce7ac2d818dc97c4a53725ccf840bb176cdda66327a35"
+    },
+    "assets/docx-agent/tools/docx_template_fill.pyc": {
+      "original": "tools/docx_template_fill.pyc",
+      "sha256": "95fba07fee69463e254d2f7f60aeb2d7d5b4cdfa658a782ac8981bda64b8f345"
+    },
+    "assets/docx-agent/tools/scholar_fetch.py": {
+      "original": "tools/scholar_fetch.py",
+      "sha256": "d4348b6ece54dfa24b773d7f341159e6a4e6056bde89b6e9958e1d64b5fbf392"
+    },
+    "assets/skills/comp-paper-en-docx/SKILL.md": {
+      "original": "skills/comp-paper-en-docx/SKILL.md",
+      "sha256": "f2516767be665c0e35079fc516c630e10af3381431eb45bd82a7ceb44b38cd44"
+    },
+    "assets/skills/comp-paper-zh-docx/SKILL.md": {
+      "original": "skills/comp-paper-zh-docx/SKILL.md",
+      "sha256": "ecf359732d2b41f353347f7355783336871f84d5725e7f742e2f1c08b581c89a"
+    },
+    "assets/skills/docx-export/SKILL.md": {
+      "original": "skills/docx-export/SKILL.md",
+      "sha256": "941f320431e84d014d19ae290f96f83220397237daef1c65a8e822d4e010f11b"
+    },
+    "assets/skills/docx-format-check/SKILL.md": {
+      "original": "skills/docx-format-check/SKILL.md",
+      "sha256": "928157bdc9e062a7585fdf4433dfb9c7aa4adf66c413bb275841ed2f9feb4f35"
+    },
+    "assets/skills/docx-template-map/SKILL.md": {
+      "original": "skills/docx-template-map/SKILL.md",
+      "sha256": "e4f791c5dae56c268159f0592e1ff9d58afc469b2e4ea7499b829d00092dcf9a"
+    }
+  }
+}

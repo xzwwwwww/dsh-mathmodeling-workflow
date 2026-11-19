@@ -1,6 +1,7 @@
 // Deterministic inputs through the complete plugin workflow, using real Word conversion.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -26,7 +27,7 @@ const chinesePaper = [
   '# 调度模型回归样稿', '', '## 摘要', '', '模型计算的成本为 12.5 元，准确率为 94%。', '',
   '关键词：调度；敏感性；误差', '', '## 目录', '', '- 问题求解', '- 结果检验', '',
   '## 1 问题 1：确定调度方案', '', '本节给出求解流程，并利用定量结果检验调度方案。', '',
-  '![图 1 成本对比](../figures/fig_q1_cost.png)', '', '图中的结果与成本表一致。', '',
+  '![图 1 成本对比](figures/fig_q1_cost.png)', '', '图中的结果与成本表一致。', '',
   '![图 2 求解流程](../figures/fig_framework.pdf)', '',
   '目标函数为 $f(x)=x^2$，由边际变化解释求解过程。', '',
   '$$\n\\frac{\\partial f}{\\partial x}=2x\n$$', '',
@@ -103,10 +104,14 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
     [mode, '--workspace', '.', '--competition', 'generic', '--language', 'zh', ...options], ws, expected);
   const checkNumbers = (expected = 0) => python('_utils/paper_data_check.py', ['--mode', 'docx'], ws, expected);
   const paperPrompt = await next('comp-paper-zh-docx');
+  assert.match(paperPrompt, /docx-cn-engine markdown 约定/);
+  assert.match(paperPrompt, /图号起句检测/);
+  assert.match(paperPrompt, /MMW_FAST_MODE=1/);
+  assert.doesNotMatch(paperPrompt, /MH_FAST_MODE=1/);
   assert.match(paperPrompt, /paper_data_check.py --mode docx/);
   assert.match(paperPrompt, /docx_paper.py precheck/);
   assert.doesNotMatch(paperPrompt, /docx_paper.py export/);
-  await put(ws, 'paper/main.md', chinesePaper.replace('../figures/fig_q1_cost.png', 'https://example.invalid/figure.png'));
+  await put(ws, 'paper/main.md', chinesePaper.replace('figures/fig_q1_cost.png', 'https://example.invalid/figure.png'));
   await finish('docx_source', false);
   await put(ws, 'paper/main.md', chinesePaper.replace('<!-- label: TABLE_main -->', '<!-- label: TABLE_draft -->'));
   await finish('docx_source', false);
@@ -131,6 +136,8 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
   await finish('paper_data_check');
 
   const exportPrompt = await next('docx-export');
+  assert.match(exportPrompt, /DOCX_FORMAT_CHECK_REPORT\.md/);
+  assert.match(exportPrompt, /Hard Output Gate/);
   assert.match(exportPrompt, /docx_paper.py export/);
   assert.match(exportPrompt, /docx_paper.py verify/);
   await put(ws, 'paper/main.docx', 'Invalid Word file. '.repeat(1000));
@@ -180,14 +187,19 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
     await put(english, 'figures/all_results.json', results);
     await finishEnglish('comp-code');
     const enPrompt = await nextEnglish('comp-paper-en-docx');
+    assert.match(enPrompt, /Write Summary Sheet LAST/);
+    assert.match(enPrompt, /Claims-Evidence Matrix Verification/);
     assert.match(enPrompt, /--page-limit 25/);
     const source = [
       '# Scheduling under Limited Capacity', '', '## Summary Sheet', '', 'We report a deterministic comparison.', '',
       '## 1. Sub-Problem 1: Select a schedule', '',
       'The cost model provides a consistent basis for selecting a timetable. Each feasible solution is evaluated against the operating constraints.\n\n'.repeat(40),
       'The objective is $C=\\sum_i c_i x_i$.', '', '## 2. Conclusion', '', 'The comparison supports the proposed workflow.', '',
-      'Our team did not use any AI tools during the competition.', '', '## References', '',
+      '## AI Tool Usage Statement', '', 'The team did not use any AI tools during the competition.', '', '## References', '',
       '[1] Boyd S, Vandenberghe L. Convex Optimization. Cambridge University Press, 2004.', '',
+      '## Appendix A: Portable fixture', '', '```text',
+      Array.from({ length: 180 }, (_, i) => createHash('sha256').update(`fixture-${i}`).digest('hex').slice(0, 32)).join('\n'),
+      '```', '',
     ].join('\n');
     await put(english, 'paper/main.md', source.replace('## Summary Sheet', '## Abstract'));
     const noSummary = await call('modeling_finish', { workspace: english });

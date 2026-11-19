@@ -1,3 +1,7 @@
 # Preserve upstream TeX dependency bytes so provenance SHA-256 values remain reproducible.
 # Their original formatting is part of the upstream files; do not lint its whitespace.
 assets/tex-deps/** -text -whitespace
+# Keep imported Agent assets byte-for-byte identical to their source.
+assets/docx-agent/** -text -whitespace
+assets/skills/comp-paper-*-docx/SKILL.md -text -whitespace
+assets/skills/docx-*/SKILL.md -text -whitespace

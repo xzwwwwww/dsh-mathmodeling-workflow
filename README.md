@@ -9,7 +9,7 @@
 赛题目录/ ──► 8 步流水线 ──► paper/main.pdf + 全部源码/图表/中间产物
 ```
 
-## v0.6.0 支持 Word 论文
+## v0.6.1 接入原 Agent 的 Word 技能与工具
 
 选择 `output_format: "docx"`，工作流会先写作及验收 Markdown，再导出可编辑的 Word 论文。中文和英文赛事都能选用。严格模式在写作阶段核对源稿数字与结果，导出验收校对当前稿件、图片与 Word 产物。[Word 使用说明](docs/docx-workflow.md)
 
