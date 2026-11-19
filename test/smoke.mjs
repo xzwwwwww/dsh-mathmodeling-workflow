@@ -365,7 +365,7 @@ async function main() {
     if (!rel.endsWith('.md')) continue;
     const text = await readFile(path.join(ASSETS, 'skills', rel), 'utf8');
     for (const m of text.matchAll(/_utils\/([A-Za-z0-9_.-]+\.(?:py|sh))/g)) {
-      const originalDocxTool = /^(?:comp-paper-(?:zh|en)-docx|docx-[^/\\]+)[/\\]/.test(rel)
+      const originalDocxTool = /^(?:中文Word论文撰写|英文Word论文撰写|Word导出|Word格式自检|Word模板映射)[/\\]/.test(rel)
         && /^docx_(?:precheck|export|template_analyze|template_fill)\.py$/.test(m[1])
         && existsSync(path.join(ASSETS, 'docx-agent', 'tools', `${m[1]}c`));
       if (!originalDocxTool && !existsSync(path.join(ASSETS, 'utils', m[1]))) missingUtils.add(m[1]);

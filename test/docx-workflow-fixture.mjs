@@ -137,6 +137,7 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
 
   const exportPrompt = await next('docx-export');
   assert.match(exportPrompt, /DOCX_FORMAT_CHECK_REPORT\.md/);
+  assert.doesNotMatch(exportPrompt, /DOCX 模板占位映射器/);
   assert.match(exportPrompt, /Hard Output Gate/);
   assert.match(exportPrompt, /docx_paper.py export/);
   assert.match(exportPrompt, /docx_paper.py verify/);
@@ -164,9 +165,24 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
 
   let english;
   if (pagination) {
+    const templateDir = path.join(input, 'supplied');
+    const rel = 'supplied/Competition Template.docx';
+    const file = path.join(input, rel);
+    await mkdir(templateDir, { recursive: true });
+    const makeTemplate = `from docx import Document
+from docx.shared import Inches
+import sys
+doc = Document()
+doc.sections[0].top_margin = Inches(1.1)
+for text in ('Competition document', 'Title placeholder', 'Summary Sheet', 'Body placeholder', 'References', 'Appendix'):
+    doc.add_paragraph(text)
+doc.save(sys.argv[1])`;
+    const made = spawnSync(process.env.MMW_PYTHON, ['-I', '-X', 'utf8', '-c', makeTemplate, file]);
+    assert.equal(made.status, 0, made.stderr?.toString());
     const initEnglish = await call('modeling_init', { input_dir: input, workspace_name: 'word-fast-english', competition: 'mcm',
       output_format: 'docx', max_pages: 1, validation_mode: 'fast', ai_disclosure: 'none', skip_figures: true });
     english = initEnglish.workspace;
+    assert.deepEqual(initEnglish.steps.slice(-3).map((s) => s.key), ['comp-paper-en-docx', 'docx-template-map', 'docx-export']);
     const finishEnglish = async (key) => {
       const r = await call('modeling_finish', { workspace: english });
       assert.equal(r.step, key); assert.equal(r.pass, true, JSON.stringify(r)); return r;
@@ -207,8 +223,26 @@ export async function exerciseWord(call, input, { pagination = false } = {}) {
     await put(english, 'paper/main.md', source);
     const writing = await finishEnglish('comp-paper-en-docx');
     assert.ok(writing.results.some((g) => g.gate === 'paper_data_check' && g.code === 2));
-    await nextEnglish('docx-export');
-    python('_utils/docx_paper.py', ['export', '--workspace', '.', '--language', 'en', '--competition', 'mcm', '--page-limit', '25'], english);
+    const templatePrompt = await nextEnglish('docx-template-map');
+    assert.match(templatePrompt, /user_data\/supplied\/Competition Template\.docx/);
+    assert.match(templatePrompt, /DOCX 模板占位映射器/);
+    assert.match(templatePrompt, /verify-preview/);
+    const anchorMap = { language: 'en', title_anchor_para_idx: 1, abstract_anchor_para_idx: 2, body_anchor_para_idx: 3,
+      references_anchor_para_idx: 4, appendix_anchor_para_idx: 5, body_anchor_mode: 'delete', delete_paragraph_indices: [] };
+    await put(english, '_template_map.json', anchorMap);
+    await put(english, '_template_check_report.md', '# Template trial fixture\nVerified the mapped title, summary, body, references and appendix against the selected template.\n');
+    const opts = ['--workspace', '.', '--language', 'en', '--competition', 'mcm', '--page-limit', '25'];
+    const runDocx = (op, flags = [], status = 0) => python('_utils/docx_paper.py', [op, ...opts, ...flags], english, status);
+    runDocx('export', ['--template-preview']);
+    runDocx('verify-preview');
+    await put(english, '_template_map.json', { ...anchorMap, body_anchor_mode: 'keep' });
+    const stalePreview = await call('modeling_finish', { workspace: english });
+    assert.ok(stalePreview.results.some(g => g.gate === 'docx_template' && !g.ok), JSON.stringify(stalePreview));
+    await put(english, '_template_map.json', anchorMap);
+    await finishEnglish('docx-template-map');
+    const exportPrompt = await nextEnglish('docx-export');
+    assert.doesNotMatch(exportPrompt, /DOCX 模板占位映射器/);
+    runDocx('export');
     const exported = await finishEnglish('docx-export');
     assert.ok(exported.results.find(g => g.gate === 'docx_output').detail.layoutPages > 0);
     assert.ok((await stat(path.join(english, renderPdfPath))).size > 1000);

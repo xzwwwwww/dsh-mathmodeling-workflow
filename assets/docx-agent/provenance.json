@@ -57,23 +57,27 @@
       "original": "tools/scholar_fetch.py",
       "sha256": "d4348b6ece54dfa24b773d7f341159e6a4e6056bde89b6e9958e1d64b5fbf392"
     },
-    "assets/skills/comp-paper-en-docx/SKILL.md": {
-      "original": "skills/comp-paper-en-docx/SKILL.md",
-      "sha256": "f2516767be665c0e35079fc516c630e10af3381431eb45bd82a7ceb44b38cd44"
-    },
-    "assets/skills/comp-paper-zh-docx/SKILL.md": {
+    "assets/skills/中文Word论文撰写/SKILL.md": {
       "original": "skills/comp-paper-zh-docx/SKILL.md",
-      "sha256": "ecf359732d2b41f353347f7355783336871f84d5725e7f742e2f1c08b581c89a"
+      "sha256": "d8ae3e2da963235829586a706a8330e971f17cfdd4c48b6eab37a2565bc93432",
+      "original_sha256": "ecf359732d2b41f353347f7355783336871f84d5725e7f742e2f1c08b581c89a",
+      "local_change": "Inputs also list COMP_REVIEW.md."
     },
-    "assets/skills/docx-export/SKILL.md": {
+    "assets/skills/英文Word论文撰写/SKILL.md": {
+      "original": "skills/comp-paper-en-docx/SKILL.md",
+      "sha256": "63eda9bfe634eb5a0a2bf34ebcd9fa13407d8fdcac6b25e4ca78f896a492e073",
+      "original_sha256": "f2516767be665c0e35079fc516c630e10af3381431eb45bd82a7ceb44b38cd44",
+      "local_change": "Inputs also list COMP_REVIEW.md."
+    },
+    "assets/skills/Word导出/SKILL.md": {
       "original": "skills/docx-export/SKILL.md",
       "sha256": "941f320431e84d014d19ae290f96f83220397237daef1c65a8e822d4e010f11b"
     },
-    "assets/skills/docx-format-check/SKILL.md": {
+    "assets/skills/Word格式自检/SKILL.md": {
       "original": "skills/docx-format-check/SKILL.md",
       "sha256": "928157bdc9e062a7585fdf4433dfb9c7aa4adf66c413bb275841ed2f9feb4f35"
     },
-    "assets/skills/docx-template-map/SKILL.md": {
+    "assets/skills/Word模板映射/SKILL.md": {
       "original": "skills/docx-template-map/SKILL.md",
       "sha256": "e4f791c5dae56c268159f0592e1ff9d58afc469b2e4ea7499b829d00092dcf9a"
     }

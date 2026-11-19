@@ -6,6 +6,7 @@ import path from 'node:path';
 import { apply } from '../index.js';
 import { checkWordPageProof, resolveDocxAgentApp } from '../lib/docxRuntime.js';
 import { gateAiDisclosure } from '../lib/gates.js';
+import { selectDocxTemplate } from '../lib/scan.js';
 import { resolveSteps } from '../lib/steps.js';
 import { normalizeSwitches } from '../lib/switches.js';
 import { exerciseWord, put } from './docx-workflow-fixture.mjs';
@@ -21,6 +22,18 @@ for (const competition of ['cumcm', 'mcm']) {
   assert.ok(steps.at(-2).key.endsWith(`${switches.language}-docx`));
   assert.ok(steps.find(step => step.key === 'comp-review').order < steps.at(-2).order);
 }
+const templateSwitches = normalizeSwitches({ output_format: 'docx' }).switches;
+const uploads = ['user_data/赛题.docx', 'user_data/格式/论文模板.docx'];
+assert.equal(selectDocxTemplate(templateSwitches, uploads.slice(0, 1)), null);
+assert.equal(selectDocxTemplate(templateSwitches, uploads), uploads[1]);
+assert.equal(selectDocxTemplate(templateSwitches, ['user_data/blank.dotx']), 'user_data/blank.dotx');
+assert.equal(selectDocxTemplate({ ...templateSwitches, docx_template: 'off' }, uploads), null);
+assert.equal(selectDocxTemplate({ ...templateSwitches, docx_template: '赛题.docx' }, uploads), uploads[0]);
+assert.equal(selectDocxTemplate({ ...templateSwitches, output_format: 'pdf' }, uploads), null);
+assert.throws(() => selectDocxTemplate(templateSwitches, [...uploads, 'user_data/other.dotx']), /多个 Word 模板/);
+assert.throws(() => selectDocxTemplate({ ...templateSwitches, docx_template: '../x.docx' }, uploads), /未在赛题输入中找到/);
+assert.deepEqual(resolveSteps(templateSwitches, { docxTemplate: uploads[1] }).slice(-3).map(s => s.key),
+  ['comp-paper-zh-docx', 'docx-template-map', 'docx-export']);
 const pdf = await PDFDocument.create();
 pdf.addPage(); pdf.addPage();
 const bytes = await pdf.save();

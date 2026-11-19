@@ -3,5 +3,4 @@
 assets/tex-deps/** -text -whitespace
 # Keep imported Agent assets byte-for-byte identical to their source.
 assets/docx-agent/** -text -whitespace
-assets/skills/comp-paper-*-docx/SKILL.md -text -whitespace
-assets/skills/docx-*/SKILL.md -text -whitespace
+assets/skills/*Word*/SKILL.md -text -whitespace

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { COMPETITIONS, DEFAULT_SWITCHES, COMPETITION_KEYS, normalizeSwitches, summarizeSwitches, perProblemFlowStyle, explicitSwitchesForUpdate } from './lib/switches.js';
 import { resolveSteps, stepDirName } from './lib/steps.js';
-import { scanInput, summarizeScan } from './lib/scan.js';
+import { scanInput, selectDocxTemplate, summarizeScan } from './lib/scan.js';
 import { scaffoldWorkspace, readSkillBody, syncTemplates, refreshBundledChecks } from './lib/scaffold.js';
 import { buildStepPrompt } from './lib/prompt.js';
 import { runGates } from './lib/gates.js';
@@ -16,7 +16,7 @@ import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.6.1';
+const BUILD = '0.6.2';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -148,6 +148,7 @@ export function apply(ctx, config = {}) {
         max_pages: { type: 'number', description: '正文页数目标（下限，不是全文上限）：目录之后→参考文献之前；无目录则摘要之后→参考文献之前；不含摘要/目录/参考文献/附录代码/AI 声明。缺省用赛项默认，rich_mode 打开时抬到 ≥50' },
         language: { type: 'string', enum: ['zh', 'en'], description: '论文语言：zh=中文（默认中文赛项）/ en=English（默认 MCM/ICM/APMCM 英文赛事）。显式传值覆盖自动推断，决定用中文还是英文论文/编译技能、页数估算口径（900 字/页 vs 2200 字符/页）' },
         output_format: { type: 'string', enum: ['pdf', 'docx', 'latex'], description: '最终论文格式。pdf（默认，latex 为兼容别名）走 TeX→PDF；docx 走 Markdown 写作→Word 导出。' },
+        docx_template: { type: 'string', description: 'Word 模板。auto（默认）自动识别 .dotx 或名称含模板/范本/template 的 .docx；off 关闭；也可指定输入目录内 .docx/.dotx 相对路径。仅 DOCX 有效。' },
         figure_style: { type: 'string', enum: ['default', 'nature'], description: '数据图风格：default=去指纹随机配色；nature=深蓝主色+Arial+粗轴' },
         flowchart_engine: { type: 'string', enum: ['drawio', 'html'], description: '流程图引擎：drawio 产物可拖拽编辑；html 布局更好但不可拖拽。会替换步骤里的技能' },
         diagram_style: { type: 'string', enum: ['mono', 'plain', 'modern'], description: '流程图版式，仅 html 引擎生效' },
@@ -182,7 +183,8 @@ export function apply(ctx, config = {}) {
       const { switches, errors } = normalizeSwitches(args);
       if (errors.length) throw new Error(errors.join('；'));
 
-      if (switches.output_format === 'docx') await resolveDocxAgentApp(base);
+      if (switches.output_format === 'docx') await resolveDocxAgentApp();
+      const docxTemplate = selectDocxTemplate(switches, files.map((file) => `user_data/${file.rel}`));
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
       const defaultName = `modeling-${path.basename(inputDir).replace(/[^\w\u4e00-\u9fff-]+/g, '_')}-${stamp}`;
       const workspaceName = String(args.workspace_name ?? defaultName);
@@ -228,7 +230,7 @@ export function apply(ctx, config = {}) {
 
       const scan = summarizeScan(files);
 
-      const steps = resolveSteps(switches);
+      const steps = resolveSteps(switches, { docxTemplate });
       const title = switches.title || `${COMPETITIONS[switches.competition].label}${switches.problem_id ? ` ${switches.problem_id}题` : ''} - ${path.basename(inputDir)}`;
       switches.title = title;
 
@@ -236,6 +238,7 @@ export function apply(ctx, config = {}) {
         workspaceDir: workspace,
         assetsDir: ASSETS_DIR,
         inputFiles: files,
+        docxTemplate,
         switches,
         steps,
         title,
@@ -274,6 +277,7 @@ export function apply(ctx, config = {}) {
         '检测到的输入：',
         `- 文件共 ${scan.total} 个：${Object.entries(scan.byKind).map(([k, v]) => `${k}=${v}`).join('，')}`,
         scan.problemFiles.length ? `- 赛题：${scan.problemFiles.join('、')}` : '- 赛题：未检测到',
+        ...(switches.output_format === 'docx' ? [docxTemplate ? `- Word 模板：${docxTemplate}` : '- Word 模板步骤：省略'] : []),
         scan.requirementFiles.length ? `- 自定义要求：${scan.requirementFiles.join('、')}` : '- 自定义要求：未检测到',
         `- 已复制到 user_data/：${uploaded.length} 个`,
         '',
@@ -338,10 +342,10 @@ export function apply(ctx, config = {}) {
       const index = state.steps.findIndex((s) => s.key === step.key);
       await refreshBundledChecks(workspace, ASSETS_DIR, state.switches);
       const originalSkill = state.switches.output_format === 'docx' ? docxSkillName(step, state.switches) : null;
-      if (originalSkill) await ensureDocxTools(workspace, ASSETS_DIR, { stageSkills: true });
-      const hasWordTemplate = (state.inputFiles ?? []).some((file) => /\.do[ct]x$/i.test(file));
+      if (originalSkill) await ensureDocxTools(workspace, ASSETS_DIR, { stageSkills: true, template: state.docxTemplate });
+      const legacyTemplate = !Object.hasOwn(state, 'docxTemplate') && (state.inputFiles ?? []).some((file) => /\.do[ct]x$/i.test(file));
       const skillBody = originalSkill
-        ? await readDocxSkill(originalSkill, { templateArgs: hasWordTemplate ? docxArgs(state.switches) : undefined })
+        ? await readDocxSkill(originalSkill, { templateArgs: docxArgs(state.switches), legacyTemplate })
         : await readSkillBody(ASSETS_DIR, step.skill);
       if (originalSkill) step.skill = originalSkill;
       const prompt = await buildStepPrompt({ workspace, state, step, skillBody, index, total: state.steps.length });
@@ -730,7 +734,8 @@ export function apply(ctx, config = {}) {
       const { switches, errors } = normalizeSwitches(explicit);
       if (errors.length) throw new Error(errors.join('；'));
 
-      const steps = resolveSteps(switches);
+      const docxTemplate = selectDocxTemplate(switches, state.inputFiles ?? []);
+      const steps = resolveSteps(switches, { docxTemplate });
       // 语言/赛项变了：模板包要跟着换（否则 en→zh 时 _templates 里没有 cumcm 等中文模板）
       if (state.switches.language !== switches.language || state.switches.competition !== switches.competition
         || state.switches.output_format !== switches.output_format) {
@@ -745,6 +750,7 @@ export function apply(ctx, config = {}) {
       await writeFile(path.join(workspace, '.env_skill'), buildEnvSkill(switches), 'utf8');
 
       state.switches = switches;
+      state.docxTemplate = docxTemplate;
       state.explicitSwitches = explicit;
       state.steps = steps.map((st) => ({
         key: st.key,

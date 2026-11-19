@@ -38,6 +38,9 @@ STAMP_VERSION = 2
 AGENT_CONFIG = ".mmw/docx-agent.json"
 TEMPLATE_MAP = "_template_map.json"
 TEMPLATE_PREVIEW = "_template_test_filled.docx"
+PREVIEW_STAMP = ".mmw/docx-template-preview.json"
+PREVIEW_STAMP_VERSION = 1
+LEGACY_TEMPLATE = object()
 TEMPLATE_KEYS = ("title", "abstract", "body", "references", "appendix")
 READER = "commonmark_x+sourcepos+implicit_figures-yaml_metadata_block-smart"
 FRONTMATTER = re.compile(r"\A---\s*\n[\s\S]*?\n---\s*\n")
@@ -111,10 +114,12 @@ class AgentRuntime:
         env["DOCX_CN_ENGINE_DIR"] = str(self.engine)
         return env
 
-    def fingerprint(self):
+    def fingerprint(self, *, preview=False):
         paths = (Path(self.python), Path(self.node), self.precheck, self.exporter, self.profile,
                  self.engine / "md_to_docx.js", self.engine / "mathml-to-docx.js", self.engine / "package.json",
                  self.engine / "package-lock.json", self.filler)
+        if preview:
+            paths += (Path(self.pandoc),)
         files = {}
         for path in paths:
             if path is not None and path.is_file():
@@ -242,13 +247,33 @@ def resolve_agent_python(override, bundled, extension, external):
     raise PaperError("Agent DOCX bytecode needs Python 3.11. Set MMW_DOCX_AGENT_PYTHON to its absolute executable path.")
 
 
-def agent_runtime(root, args):
-    config = {}
+def agent_config(root, args):
     config_path = root / AGENT_CONFIG
-    if not args.agent_app and (config_path.exists() or config_path.is_symlink()):
-        config = json.loads(read_checked(root, AGENT_CONFIG, 16 * 1024))
-        if not isinstance(config, dict):
-            raise PaperError(f"{AGENT_CONFIG} must contain an object.")
+    if args.agent_app or not (config_path.exists() or config_path.is_symlink()):
+        return {}
+    config = json.loads(read_checked(root, AGENT_CONFIG, 16 * 1024))
+    if not isinstance(config, dict):
+        raise PaperError(f"{AGENT_CONFIG} must contain an object.")
+    return config
+
+
+def template_selection(root, args, config):
+    if args.no_template:
+        return None
+    selected = args.template if args.template is not None else config.get("template", LEGACY_TEMPLATE)
+    if selected is LEGACY_TEMPLATE or selected is None:
+        return selected
+    if not isinstance(selected, str):
+        raise PaperError(f"The template in {AGENT_CONFIG} must be a path or null.")
+    if os.name == "nt":
+        selected = selected.replace("\\", "/")
+    if not selected.startswith("user_data/") or Path(selected).suffix.lower() not in {".docx", ".dotx"}:
+        raise PaperError("Select a workspace-relative .docx or .dotx template under user_data/.")
+    checked_path(root, selected)
+    return selected
+
+
+def agent_runtime(root, args, config, *, with_filler=False):
     packaged = Path(__file__).resolve().parents[1] / "docx-agent"
     value = args.agent_app or os.environ.get("MMW_DOCX_AGENT_APP") or config.get("agentApp") or packaged
 
@@ -291,7 +316,7 @@ def agent_runtime(root, args):
         source = tools / f"{name}.py"
         return external(source if source.is_file() else tools / f"{name}.pyc", f"Agent {name}")
 
-    filler = original_tool("docx_template_fill") if (root / TEMPLATE_MAP).exists() else None
+    filler = original_tool("docx_template_fill") if with_filler else None
     return AgentRuntime(app, str(python), str(node), str(pandoc), original_tool("docx_precheck"),
                         original_tool("docx_export"), profile, engine, filler)
 
@@ -812,12 +837,19 @@ class CustomTemplate:
         return {"path": self.path, "sha256": digest(self.data), "map_sha256": digest(self.mapping)}
 
 
-def custom_template(root):
+def custom_template(root, selection):
+    if selection is None:
+        return None
     map_path = checked_path(root, TEMPLATE_MAP, missing=True)
     if not map_path.exists():
-        return None
+        if selection is LEGACY_TEMPLATE:
+            return None
+        raise PaperError(f"Selected template {selection} requires {TEMPLATE_MAP}. Create the map and run export --template-preview.")
     mapping = read_checked(root, TEMPLATE_MAP, SOURCE_MAX)
-    config = json.loads(mapping)
+    try:
+        config = json.loads(mapping)
+    except ValueError as exc:
+        raise PaperError(f"Invalid JSON in {TEMPLATE_MAP}: {exc}") from None
     if not isinstance(config, dict):
         raise PaperError(f"{TEMPLATE_MAP} must be a template anchor object.")
     anchor_values = [config.get(f"{name}_anchor_para_idx") for name in TEMPLATE_KEYS]
@@ -826,16 +858,19 @@ def custom_template(root):
     if (any(value is None for value in anchor_values[:4]) or not isinstance(deleted, list)
             or any(type(value) is not int or value < 0 for value in indices + deleted)
             or len(set(indices)) != len(indices) or set(indices) & set(deleted)
-            or config.get("body_anchor_mode", "delete") not in {"keep", "delete"}):
+            or config.get("body_anchor_mode", "delete") not in ("keep", "delete")):
         raise PaperError(f"{TEMPLATE_MAP} has missing, invalid, or conflicting paragraph anchors.")
-    user_data = checked_path(root, "user_data", directory=True)
-    files = sorted(candidate.name for candidate in user_data.iterdir()
-                   if candidate.suffix.lower() in {".docx", ".dotx"} and not candidate.name.startswith("~$"))
-    if len(files) != 1:
-        raise PaperError(f"{TEMPLATE_MAP} requires exactly one .docx or .dotx template in user_data/.")
-    relative = f"user_data/{files[0]}"
+    if selection is LEGACY_TEMPLATE:
+        user_data = checked_path(root, "user_data", directory=True)
+        files = sorted(candidate.name for candidate in user_data.iterdir()
+                       if candidate.suffix.lower() in {".docx", ".dotx"} and not candidate.name.startswith("~$"))
+        if len(files) != 1:
+            raise PaperError(f"{TEMPLATE_MAP} requires exactly one .docx or .dotx template in user_data/.")
+        relative = f"user_data/{files[0]}"
+    else:
+        relative = selection
     data = read_checked(root, relative, OUTPUT_MAX)
-    counts = package_counts(data)
+    counts = package_counts(data, template_indices=(indices + deleted if selection is not LEGACY_TEMPLATE else None))
     return CustomTemplate(relative, data, mapping, counts)
 
 
@@ -876,7 +911,30 @@ def template_export(runtime, template, scratch, source, raw):
          "--profile", str(runtime.profile), "--workspace", str(scratch)],
         scratch, timeout=140, env=env, with_stderr=True,
     )
+    restore_template_section(raw, template)
     return log
+
+
+def restore_template_section(raw, template):
+    from docx import Document
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import qn
+
+    doc = Document(raw)
+    if doc._element.body.sectPr is not None:
+        return
+    # The original filler can remove the terminal sectPr along with template
+    # placeholders. Restore the selected template's last section and layout.
+    with zipfile.ZipFile(io.BytesIO(template.data)) as package:
+        section = parse_xml(package.read("word/document.xml")).body.sectPr
+    if section is None:
+        return
+    for element in section.iter():
+        relationship = element.get(qn("r:id"))
+        if relationship and relationship not in doc.part.rels:
+            raise PaperError("Agent DOCX template fill lost a section relationship.")
+    doc._element.body.append(section)
+    doc.save(raw)
 
 
 def apply_summary_break(raw, first_heading, template=None):
@@ -908,7 +966,7 @@ def normalized_text(text):
     mapped = unicodedata.normalize("NFKC", text).translate(str.maketrans("‘’“”", "''\"\""))
     return " ".join(mapped.split())
 
-def package_counts(data):
+def package_counts(data, *, template_indices=None):
     from lxml import etree
 
     namespaces = {
@@ -938,6 +996,10 @@ def package_counts(data):
             if not re.fullmatch(r"word/(?:document|footnotes|endnotes)\.xml", name):
                 continue
             content = etree.fromstring(package.read(name), xml)
+            if name == "word/document.xml" and template_indices is not None:
+                paragraph_count = len(content.xpath("./w:body/w:p", namespaces=namespaces))
+                if any(index >= paragraph_count for index in template_indices):
+                    raise PaperError(f"{TEMPLATE_MAP} refers to paragraphs outside the selected template.")
             counts["equations"] += len(content.xpath(".//m:oMath", namespaces=namespaces))
             counts["images"] += len(content.xpath(".//a:blip[@r:embed]", namespaces=namespaces))
             # The original engine uses a borderless, single-row, three-cell
@@ -1076,21 +1138,69 @@ def assert_inputs(root, paper):
             raise PaperError(f"Figure changed during DOCX processing: {relative}. Run export again.")
 
 
+def preview_binding(args, runtime_stamp, paper, template):
+    return {
+        "version": PREVIEW_STAMP_VERSION, "source_sha256": paper.source_digest,
+        "figure_sha256": paper.figure_digests, "settings": settings(args),
+        "agent_runtime": runtime_stamp, "template": template.fingerprint(),
+        "counts": paper.counts,
+    }
+
+
+def preview_snapshot(root, paper, template, expected):
+    retry = "Run export --template-preview again."
+    try:
+        stamp_bytes = read_checked(root, PREVIEW_STAMP, 2 * SOURCE_MAX)
+        stamp = json.loads(stamp_bytes)
+        docx_data = read_checked(root, TEMPLATE_PREVIEW, OUTPUT_MAX)
+    except (OSError, PaperError, ValueError) as exc:
+        raise PaperError(f"Cannot read the DOCX template preview or its stamp: {exc}. {retry}") from None
+    if not isinstance(stamp, dict) or any(stamp.get(key) != value for key, value in expected.items()):
+        raise PaperError(f"The DOCX template preview is stale for the current source, figures, template, map, settings, or Agent runtime. {retry}")
+    docx_sha256 = digest(docx_data)
+    if stamp.get("docx_sha256") != docx_sha256:
+        raise PaperError(f"The preview DOCX differs from its stamp. {retry}")
+    inspect_docx(docx_data, paper, template)
+    return stamp_bytes, docx_sha256
+
+
+def assert_preview_snapshot(root, snapshot):
+    stamp_bytes, docx_sha256 = snapshot
+    if (read_checked(root, PREVIEW_STAMP, 2 * SOURCE_MAX) != stamp_bytes
+            or digest(read_checked(root, TEMPLATE_PREVIEW, OUTPUT_MAX)) != docx_sha256):
+        raise PaperError("The DOCX template preview changed during processing. Retry with a fresh preview.")
+
+
+def assert_template_snapshot(root, args, selection, template):
+    current = template_selection(root, args, agent_config(root, args))
+    if current != selection or template_fingerprint(custom_template(root, current)) != template_fingerprint(template):
+        raise PaperError("The selected template or its map changed during DOCX processing. Retry with a fresh preview.")
+
+
+def write_stamp(root, relative, stamp):
+    publish(root, relative, (json.dumps(stamp, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+
+
 def export(root, args, scratch):
     with export_lock(root):
-        # The stamp is the commit marker. Invalidate it before any operation
-        # which might subsequently fail, including Markdown precheck.
+        # Invalidate only the commit marker for the artifact being generated.
+        stamp_path = PREVIEW_STAMP if args.template_preview else STAMP
+        checked_path(root, stamp_path, missing=True).unlink(missing_ok=True)
         if not args.template_preview:
-            checked_path(root, STAMP, missing=True).unlink(missing_ok=True)
             checked_path(root, OUTPUT, missing=True)
             checked_path(root, LAYOUT, missing=True)
-        runtime = agent_runtime(root, args)
-        runtime_stamp = runtime.fingerprint()
-        paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
-        source, staged = stage_paper(root, paper, scratch, runtime)
-        template = custom_template(root)
+        config = agent_config(root, args)
+        selection = template_selection(root, args, config)
+        template = custom_template(root, selection)
         if args.template_preview and template is None:
-            raise PaperError(f"--template-preview requires {TEMPLATE_MAP} and one template in user_data/.")
+            raise PaperError(f"--template-preview requires an active template and {TEMPLATE_MAP}.")
+        check_preview = args.template_preview or isinstance(selection, str)
+        runtime = agent_runtime(root, args, config, with_filler=template is not None)
+        runtime_stamp = runtime.fingerprint(preview=check_preview)
+        paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
+        binding = preview_binding(args, runtime_stamp, paper, template) if check_preview else None
+        preview = preview_snapshot(root, paper, template, binding) if binding and not args.template_preview else None
+        source, staged = stage_paper(root, paper, scratch, runtime)
         report = run_precheck_report(root, runtime, scratch, source, staged, write=not args.template_preview)
         raw = scratch / "layout.docx"
         if template:
@@ -1109,16 +1219,17 @@ def export(root, args, scratch):
             apply_summary_break(raw, paper.first_body_heading, template)
         docx_data = read_checked(scratch, raw.name, OUTPUT_MAX)
         actual = inspect_docx(docx_data, paper, template)
-        if args.template_preview:
-            assert_inputs(root, paper)
-            if template_fingerprint(custom_template(root)) != template.fingerprint():
-                raise PaperError("The template or its map changed during preview. Run export again.")
-            publish(root, TEMPLATE_PREVIEW, docx_data)
-            return {**paper.stats, "counts": actual, "output": TEMPLATE_PREVIEW}
-        pdf_data = render_layout(raw, scratch, runtime.node).read_bytes() if args.page_limit else None
+        pdf_data = render_layout(raw, scratch, runtime.node).read_bytes() if args.page_limit and not args.template_preview else None
         assert_inputs(root, paper)
-        if runtime.fingerprint() != runtime_stamp or template_fingerprint(custom_template(root)) != template_fingerprint(template):
-            raise PaperError("Agent DOCX runtime, profile, or template changed during export. Run export again.")
+        assert_template_snapshot(root, args, selection, template)
+        if runtime.fingerprint(preview=check_preview) != runtime_stamp:
+            raise PaperError("Agent DOCX runtime or profile changed during processing. Retry the DOCX command.")
+        if args.template_preview:
+            publish(root, TEMPLATE_PREVIEW, docx_data)
+            write_stamp(root, PREVIEW_STAMP, {**binding, "docx_sha256": digest(docx_data)})
+            return {**paper.stats, "counts": actual, "output": TEMPLATE_PREVIEW}
+        if preview:
+            assert_preview_snapshot(root, preview)
         stamp = {
             "version": STAMP_VERSION, "source_sha256": paper.source_digest,
             "figure_sha256": paper.figure_digests, "docx_sha256": digest(docx_data),
@@ -1134,20 +1245,35 @@ def export(root, args, scratch):
             result["rendered_pdf"] = LAYOUT
         else:
             checked_path(root, LAYOUT, missing=True).unlink(missing_ok=True)
-        publish(root, STAMP, (json.dumps(stamp, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        write_stamp(root, STAMP, stamp)
         return result
 
 
 def verify(root, args, scratch):
-    runtime = agent_runtime(root, args)
+    config = agent_config(root, args)
+    selection = template_selection(root, args, config)
+    template = custom_template(root, selection)
+    preview_only = args.operation == "verify-preview"
+    if preview_only and template is None:
+        raise PaperError(f"verify-preview requires an active template and {TEMPLATE_MAP}.")
+    check_preview = preview_only or isinstance(selection, str)
+    runtime = agent_runtime(root, args, config, with_filler=template is not None)
+    runtime_stamp = runtime.fingerprint(preview=check_preview)
     paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
-    template = custom_template(root)
+    preview = preview_snapshot(root, paper, template, preview_binding(args, runtime_stamp, paper, template)) if check_preview else None
+    if preview_only:
+        assert_inputs(root, paper)
+        assert_template_snapshot(root, args, selection, template)
+        if runtime.fingerprint(preview=True) != runtime_stamp:
+            raise PaperError("Agent DOCX runtime or profile changed during verification. Retry verification.")
+        assert_preview_snapshot(root, preview)
+        return {**paper.stats, "counts": paper.counts, "output": TEMPLATE_PREVIEW}
     stamp_bytes = read_checked(root, STAMP, 2 * SOURCE_MAX)
     stamp = json.loads(stamp_bytes)
     expected = {
         "version": STAMP_VERSION, "source_sha256": paper.source_digest,
         "figure_sha256": paper.figure_digests, "settings": settings(args),
-        "stats": paper.stats, "counts": paper.counts, "agent_runtime": runtime.fingerprint(),
+        "stats": paper.stats, "counts": paper.counts, "agent_runtime": runtime_stamp,
         "precheck_report_sha256": digest(read_checked(root, REPORT, SOURCE_MAX)), "template": template_fingerprint(template),
     }
     if not isinstance(stamp, dict) or any(stamp.get(key) != value for key, value in expected.items()):
@@ -1166,6 +1292,11 @@ def verify(root, args, scratch):
     elif "rendered_pdf" in stamp:
         raise PaperError("Unexpected layout proof in the DOCX export stamp. Run export again.")
     assert_inputs(root, paper)
+    if preview:
+        assert_template_snapshot(root, args, selection, template)
+        if runtime.fingerprint(preview=True) != runtime_stamp:
+            raise PaperError("Agent DOCX runtime or profile changed during verification. Retry verification.")
+        assert_preview_snapshot(root, preview)
     if read_checked(root, STAMP, 2 * SOURCE_MAX) != stamp_bytes:
         raise PaperError("The DOCX export was replaced during verification. Retry verification.")
     return result
@@ -1194,13 +1325,16 @@ def main(argv=None):
     root = None
     try:
         parser = JsonArgumentParser(description=__doc__)
-        parser.add_argument("operation", choices=("precheck", "export", "verify"))
+        parser.add_argument("operation", choices=("precheck", "export", "verify", "verify-preview"))
         parser.add_argument("--workspace", required=True)
         parser.add_argument("--language", required=True, choices=("zh", "en"))
         parser.add_argument("--competition", required=True)
         parser.add_argument("--page-limit", type=int, default=0)
         parser.add_argument("--agent-app", help="absolute path to the Agent DOCX assets directory")
-        parser.add_argument("--template-preview", action="store_true", help=f"write {TEMPLATE_PREVIEW} only")
+        templates = parser.add_mutually_exclusive_group()
+        templates.add_argument("--template", help="workspace-relative .docx or .dotx path under user_data/")
+        templates.add_argument("--no-template", action="store_true", help="disable custom template handling")
+        parser.add_argument("--template-preview", action="store_true", help=f"write {TEMPLATE_PREVIEW} and its stamp")
         parser.add_argument("--report", action="store_true", help=f"write {REPORT} after precheck")
         args = parser.parse_args(argv)
         if args.page_limit < 0:
@@ -1216,7 +1350,12 @@ def main(argv=None):
             scratch = Path(temp).resolve(strict=True)
             if args.operation == "precheck":
                 try:
-                    runtime = agent_runtime(root, args)
+                    config = agent_config(root, args)
+                    selection = template_selection(root, args, config)
+                    # Explicit prechecks run before a map exists. Retain legacy runtime
+                    # resolution for workspaces that were already using an implicit map.
+                    with_filler = selection is LEGACY_TEMPLATE and (root / TEMPLATE_MAP).exists()
+                    runtime = agent_runtime(root, args, config, with_filler=with_filler)
                     paper = precheck(root, runtime.pandoc, scratch, summary_sheet=summary_sheet_required(args))
                     source, staged = stage_paper(root, paper, scratch, runtime)
                     run_precheck_report(root, runtime, scratch, source, staged, write=args.report)

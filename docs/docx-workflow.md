@@ -11,6 +11,12 @@
 }
 ```
 
+## 上传 Word 模板
+
+`docx_template` 默认为 `auto`。将 `.dotx` 文件或名称包含「模板」「范本」或 `template` 的 `.docx` 放进 `input_dir`，插件会在 Markdown 写作之后、Word 导出之前加入「Word 模板映射与试填」。有多个候选时，通过 `docx_template` 传入所选文件相对 `input_dir` 的路径。普通名称的 Word 文件也可以用这种方式指定。设为 `off` 或未识别到模板时，流程跳过这一步。
+
+该步骤使用原版映射技能生成 `_template_map.json`、`_template_check_report.md` 和 `_template_test_filled.docx`。验收将试填文件与所选模板、映射和当前稿件核对。最终导出前若修改了稿件、图表或映射，需重新试填。升级前创建的工作区可在开工前用 `modeling_switches` 重排步骤。已经开始的工作区继续使用原有步骤清单。
+
 ## 写作和导出
 
 1. 「论文撰写（Markdown）」完成 `paper/main.md`，按赛题组织摘要、逐问正文、参考文献和附录。验收检查正文篇幅、子问题覆盖、清单中的图表嵌入和 AI 声明。正文使用中文 900 字/页或英文 2200 字符/页估算，与 PDF 写作闸门一样在低于目标 80% 时阻断。正文从目录后（无目录时从摘要后）计至参考文献或后置部分之前。
@@ -42,7 +48,7 @@ python _utils/docx_paper.py verify --workspace . --language zh --competition cum
 
 ## 实现与测试
 
-插件附带完整的 `comp-paper-zh-docx`、`comp-paper-en-docx`、`docx-format-check`、`docx-export` 和 `docx-template-map`。派发时读取这些技能并复制到工作区。在提示词内，原 `MH_*` 开关映射为当前插件的 `MMW_*`。
+插件的 `assets/skills` 下提供「中文Word论文撰写」「英文Word论文撰写」「Word格式自检」「Word导出」「Word模板映射」。派发时读取并复制到工作区。在提示词内，原 `MH_*` 开关映射为当前插件的 `MMW_*`。
 
 适配器直接调用随插件分发的原版 `docx_precheck`、`docx_export` 和 `docx-cn-engine`，使用原版 `competition_zh.json` 或 `competition_en.json` 版式。严格数字核对、正文结构、对象完整性和文件新鲜度由插件验收。安装后可在任意赛题目录运行。
 

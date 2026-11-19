@@ -31,7 +31,7 @@ echo "FAST_MODE=$FAST_MODE"
 
 ## Inputs
 
-1. PROBLEM_ANALYSIS.md, MODELING_REPORT.md, RESULTS.md
+1. PROBLEM_ANALYSIS.md, MODELING_REPORT.md, RESULTS.md,COMP_REVIEW.md
 2. figures/ — `.png` / `.pdf`
 3. code/, figures/all_results.json, figures/problem_*_results.json
 

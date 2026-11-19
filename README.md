@@ -9,7 +9,9 @@
 赛题目录/ ──► 8 步流水线 ──► paper/main.pdf + 全部源码/图表/中间产物
 ```
 
-## v0.6.1 接入原 Agent 的 Word 技能与工具
+## Word 交付与上传模板
+
+从 v0.6.2 起，Word 工作流可用 `docx_template` 自动识别、自选或关闭上传模板。选到模板时，Markdown 写作和 Word 导出之间会加入「Word 模板映射与试填」。详见 [Word 工作流说明](docs/docx-workflow.md)。
 
 选择 `output_format: "docx"`，工作流会先写作及验收 Markdown，再导出可编辑的 Word 论文。中文和英文赛事都能选用。严格模式在写作阶段核对源稿数字与结果，导出验收校对当前稿件、图片与 Word 产物。[Word 使用说明](docs/docx-workflow.md)
 
