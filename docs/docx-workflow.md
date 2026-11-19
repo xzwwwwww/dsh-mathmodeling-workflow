@@ -1,0 +1,45 @@
+# 竞赛论文 Word 交付
+
+用建模插件运行赛题时，可在自然语言里说明「论文最终交付 Word，严格模式」。参数 `output_format: "docx"` 适用于 `modeling_init`，也可在工作流开始前通过 `modeling_switches` 设置。默认格式为 PDF。
+
+```json
+{
+  "input_dir": "D:/2026国赛A",
+  "competition": "cumcm",
+  "output_format": "docx",
+  "validation_mode": "strict"
+}
+```
+
+## 写作和导出
+
+1. 「论文撰写（Markdown）」完成 `paper/main.md`，按赛题组织摘要、逐问正文、参考文献和附录。验收检查正文篇幅、子问题覆盖、清单中的图表嵌入和 AI 声明。正文使用中文 900 字/页或英文 2200 字符/页估算，与 PDF 写作闸门一样在低于目标 80% 时阻断。正文从目录后（无目录时从摘要后）计至参考文献或后置部分之前。
+2. 严格模式在写作阶段执行 `paper_data_check.py --mode docx`。数字异常要追溯结果 JSON 并修稿，直至通过。验收读取模式、报告和输入哈希。摘要里的结果也参加核对。快速模式会跳过数字真实性核对，保留其余结构和合规门槛。
+3. 「Word 导出与合规」按中文或英文排版生成 `paper/main.docx`。Markdown 表格和受支持的数学公式在 Word 中可编辑。单页 PDF 图可以转为 PNG 后嵌入。导出后校验可打开性、对象数量和导出清单里的源稿、图片及产物哈希。
+4. 对有总页数硬上限的赛事，导出时还会用 LibreOffice 生成 `paper/docx-layout-check.pdf`，验收读取实际页树。若官方提交指定 PDF 或专用封面，按当届规则准备正式提交版。插件的内置 Word 版式按中英文区分。
+
+图片路径以 `paper/main.md` 为起点，例如 `../figures/fig_accuracy.png`。每张已规划的表要复制真实数据到正文的管道表，在表格后留一空行，再写 `<!-- label: TABLE_accuracy -->`。源稿和图表修改后，重新跑相关检查及导出。导出验收后如再次修改，可指定 `modeling_finish` 的 `step: "docx-export"` 复验。
+
+## 运行环境
+
+- Python 3.10+，含 `python-docx`、`lxml` 与 `Pillow`。DSH 自带的文档 Python 环境通常已包含。Host 可通过 `MMW_PYTHON` 指定解释器绝对路径。
+- Pandoc 3.x。可加入 PATH，或设置 `MMW_PANDOC` 为其绝对路径。
+- 图表用 PNG 或 JPEG 时无需额外转换器。嵌入单页 PDF 图时需 `pdftoppm`（PATH 或 `MMW_PDFTOPPM`）。可直接引用原图对应的 PNG 预览。
+- MCM/ICM 等带总页数上限的赛项需要 LibreOffice（PATH 或 `MMW_SOFFICE`），也可用 DSH 的 LibreOffice Kit CLI（`MMW_DSOFFICE_CLI` 指向 CLI 的 JavaScript 文件，`MMW_NODE` 可指定 Node.js 解释器）。
+
+手工复跑请在工作区根目录使用所选解释器。示例为中文国赛。
+
+```text
+python _utils/docx_paper.py precheck --workspace . --language zh --competition cumcm --report
+python _utils/paper_data_check.py --mode docx
+python _utils/docx_paper.py export --workspace . --language zh --competition cumcm
+python _utils/docx_paper.py verify --workspace . --language zh --competition cumcm
+```
+
+使用对应步骤提示里的语言、赛项及 `--page-limit`。如果解释器或转换器由环境变量配置，请确保运行 DSH 的进程和执行导出的终端均能读取。更新插件源码后重启 DSH 可加载新的工具参数和提示词。
+
+## 实现与测试
+
+写作与导出分工参考备份 Agent 的 `comp-paper-zh-docx`、`comp-paper-en-docx` 和 `docx-export` 技能，以及 `tools/docx-cn-engine` 的排版与数学公式约定。插件分发可审阅的 Python 源码，转换使用 Pandoc，版式处理使用 python-docx。
+
+运行 `node test/run.mjs` 执行插件回归。设置 `MMW_TEST_DOCX=1` 要求真实 Word 转换用例通过。设置 `MMW_TEST_DOCX_PAGINATION=1` 同时执行英文 MCM 真实分页用例。可通过设置相同变量运行独立 DSH Host 集成测试。测试使用合成数据和真实转换器。

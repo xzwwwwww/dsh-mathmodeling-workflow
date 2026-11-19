@@ -243,6 +243,12 @@ try {
   assert.ok((await readState(ws)).steps.every(s=>s.status==='completed'));
   check('all eight strict steps complete; invalid PDF blocks; real PDF page tree passes', {progress:status.progress});
 
+  if (process.env.MMW_TEST_DOCX === '1') {
+    const { exerciseWord } = await import('./docx-workflow-fixture.mjs');
+    const word = await exerciseWord(call, input, { pagination: process.env.MMW_TEST_DOCX_PAGINATION === '1' });
+    check('real Word mode across native dispatch, eight strict gates, export integrity and retry', word);
+  }
+
   const fast=await call('modeling_init',{input_dir:'fixture-input',workspace_name:'fast',competition:'generic',max_pages:1,validation_mode:'fast'});
   assert.equal(fast.steps.length,7); assert.ok(!fast.steps.some(s=>s.key==='comp-review'));
   const legacy=await call('modeling_init',{input_dir:'fixture-input',workspace_name:'legacy-fast',competition:'generic',max_pages:1});

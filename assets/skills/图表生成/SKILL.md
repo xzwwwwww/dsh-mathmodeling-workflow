@@ -45,7 +45,7 @@ Stats tables: `stats_utils.py` provides `regression_table`, `descriptive_table`,
 
 ## ⛔⛔⛔ Output Contract (highest priority)
 
-**Must produce all planned figures (per PAPER_PLAN.md or skill-specific plan)** as `figures/fig_*.png/pdf` plus `figures/latex_includes.tex` (or, in docx mode, the same PNGs without latex_includes.tex requirement).
+**Must produce all planned figures (per PAPER_PLAN.md or skill-specific plan)** as `figures/fig_*.png/pdf` plus `figures/latex_includes.tex`. In Word mode, keep this file as the upstream figure index. Word writing embeds the original images and Markdown tables.
 
 ⛔ **数据图命名规范**：本步骤画的是**数据图**（柱状/折线/热力/散点等），命名 `fig_<语义>`，但**避开架构/流程图专用前缀**：`fig_arch` / `fig_flow` / `fig_roadmap` / `fig_pipeline` / `fig_framework` / `fig_network` / `fig_state` / `fig_decision` / `fig_overview` 等（这些归 流程图绘制）。例如流速图用 `fig_velocity` 而非 `fig_flow_rate`、状态分布用 `fig_status_dist` 而非 `fig_state_traj`。否则本步骤的产出对账会把它当架构图跳过，导致漏画不报错。
 

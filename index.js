@@ -9,13 +9,14 @@ import { scanInput, summarizeScan } from './lib/scan.js';
 import { scaffoldWorkspace, readSkillBody, syncTemplates, refreshBundledChecks } from './lib/scaffold.js';
 import { buildStepPrompt } from './lib/prompt.js';
 import { runGates } from './lib/gates.js';
+import { ensureDocxTools } from './lib/docxRuntime.js';
 import { workspaceFlowStyle } from './lib/flowPlan.js';
 import { readState, writeState, nextPendingStep, progressOf, isSettledStep } from './lib/state.js';
 import { addQuestion, openQuestions, answerQuestion, describeOpen } from './lib/questions.js';
 import { buildClaudeMd, buildEnvSkill } from './lib/claudeMd.js';
 
 const ASSETS_DIR = fileURLToPath(new URL('./assets', import.meta.url));
-const BUILD = '0.5.4';
+const BUILD = '0.6.0';
 const text = (t) => [{ type: 'text', text: t }];
 const jsonSchema = { type: 'object', additionalProperties: true };
 
@@ -23,14 +24,14 @@ export const inject = ['tools', 'systemPrompt', 'workingDirectory'];
 
 const PROTOCOL = `## 数学建模竞赛工作流（mathmodeling-workflow 插件）
 当用户要求跑数学建模竞赛（国赛/美赛/五一杯/华中杯/亚太赛等），或提到"用建模插件/竞赛工作流/整套流程"，按下面协议执行：
-1. 先确认开关（缺项就用默认值并在回复里列出来）：竞赛 \`modeling_init\` 的 competition、题号、页数、figure_style、flowchart_engine、diagram_style、rich_mode、validation_mode、ai_disclosure、enable_comp_review、custom_requirements。
+1. 先确认开关（缺项就用默认值并在回复里列出来）：竞赛 \`modeling_init\` 的 competition、题号、页数、output_format（pdf 默认；docx 为 Markdown 写作后导出 Word）、figure_style、flowchart_engine、diagram_style、rich_mode、validation_mode、ai_disclosure、enable_comp_review、custom_requirements。
    - **页数开关 \`max_pages\` 是「正文页数目标（下限）」**：目录之后 → 参考文献之前（无目录则摘要之后 → 参考文献之前），不含摘要/目录/参考文献/附录代码/AI 声明；**不是全文页数上限，也不是天花板**。转述给别人时原样带上这个口径，不要自己换算成"全文不超过 N 页"。
 2. 调 \`modeling_init\`（input_dir = 用户准备好的赛题目录）。它会扫描文件、建 workspace、写 CLAUDE.md、复制 _utils/_references/_templates/skills（技能整包）。**不要自己手写这些文件**。
 3. 循环：\`modeling_next\` 拿本步 prompt 文件 → 用 \`subagent\`（prompt 用返回的 subagent_prompt，cwd 用返回的 cwd）派发一个子代理 → 子代理结束后调 \`modeling_finish\` 验收。
 4. **子代理要提问时**：子代理自己会调 \`modeling_ask\`（或结束时告诉你它卡在哪），你收到后调 \`modeling_pending\` 取问题 → 用 \`ask_user_question\` 问用户 → 拿到回答后调 \`modeling_answer\` 记录 → 再 \`send_message\` 把「用户回答：…」发回同一个子代理让它继续，最后才 \`modeling_finish\`。不要替用户编答案。
 5. 验收失败时：把 hints 追加进下一次派发（继续用同一子代理的 send_message，或新建子代理并引用同一 prompt 文件 + hints），最多重试 2 次；仍失败就向用户汇报卡点。
 6. 每次只派一个子代理，不要并行；主会话不要自己写建模/代码/论文内容，只做调度与验收。逻辑对抗复核（comp-review）默认开启，排在**图表之后、论文之前**（它要复核图表并触发重画，必须等图齐了再跑）；除非用户明确要求省钱才传 enable_comp_review: false。
-7. 全部步骤已结束（completed 或明确 skipped）后调 \`modeling_status\` 汇报产物路径与最终 PDF；fast 模式不派发逻辑对抗复核，跳过不能表述为已复核通过。`;
+7. 全部步骤已结束（completed 或明确 skipped）后调 \`modeling_status\` 汇报产物路径与所选格式的最终论文；fast 模式不派发逻辑对抗复核，跳过不能表述为已复核通过。`;
 
 function toolOutput(name, renderKey) {
   return {
@@ -146,6 +147,7 @@ export function apply(ctx, config = {}) {
         title: { type: 'string', description: '论文标题/赛题简称，默认取赛题目录名' },
         max_pages: { type: 'number', description: '正文页数目标（下限，不是全文上限）：目录之后→参考文献之前；无目录则摘要之后→参考文献之前；不含摘要/目录/参考文献/附录代码/AI 声明。缺省用赛项默认，rich_mode 打开时抬到 ≥50' },
         language: { type: 'string', enum: ['zh', 'en'], description: '论文语言：zh=中文（默认中文赛项）/ en=English（默认 MCM/ICM/APMCM 英文赛事）。显式传值覆盖自动推断，决定用中文还是英文论文/编译技能、页数估算口径（900 字/页 vs 2200 字符/页）' },
+        output_format: { type: 'string', enum: ['pdf', 'docx', 'latex'], description: '最终论文格式。pdf（默认，latex 为兼容别名）走 TeX→PDF；docx 走 Markdown 写作→Word 导出。' },
         figure_style: { type: 'string', enum: ['default', 'nature'], description: '数据图风格：default=去指纹随机配色；nature=深蓝主色+Arial+粗轴' },
         flowchart_engine: { type: 'string', enum: ['drawio', 'html'], description: '流程图引擎：drawio 产物可拖拽编辑；html 布局更好但不可拖拽。会替换步骤里的技能' },
         diagram_style: { type: 'string', enum: ['mono', 'plain', 'modern'], description: '流程图版式，仅 html 引擎生效' },
@@ -333,7 +335,8 @@ export function apply(ctx, config = {}) {
         };
       }
       const index = state.steps.findIndex((s) => s.key === step.key);
-      await refreshBundledChecks(workspace, ASSETS_DIR);
+      await refreshBundledChecks(workspace, ASSETS_DIR, state.switches);
+      if (state.switches.output_format === 'docx') await ensureDocxTools(workspace, ASSETS_DIR);
       const skillBody = await readSkillBody(ASSETS_DIR, step.skill);
       const prompt = await buildStepPrompt({ workspace, state, step, skillBody, index, total: state.steps.length });
 
@@ -350,7 +353,7 @@ export function apply(ctx, config = {}) {
       state.updatedAt = new Date().toISOString();
       await writeState(workspace, state);
 
-      const pageLine = (step.gates ?? []).includes('pages')
+      const pageLine = (step.gates ?? []).some((gate) => gate === 'pages' || gate === 'docx_source')
         ? `页数口径（别搞错）：max_pages=${state.switches.max_pages} 是**正文页数目标（下限）**——目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文页数上限，正文超了不扣分。\n`
         : '';
       const subagentPrompt =
@@ -414,7 +417,8 @@ export function apply(ctx, config = {}) {
         if (key) throw new Error(`工作区里没有步骤 ${key}；可用：${state.steps.map((s) => s.key).join(', ')}`);
         return { report: '没有可验收的步骤（全部已完成）。', pass: true, done: true, next: null };
       }
-      if (isSettledStep(step)) {
+      const recheckDocx = key === 'docx-export' && step.status === 'completed';
+      if (isSettledStep(step) && !recheckDocx) {
         const after = nextPendingStep(state);
         return {
           report: `第 ${step.order + 1} 步「${step.title}」${step.status === 'skipped' ? '已按快速模式跳过，未执行复核' : '已经验收通过，无需重复验收'}。${after ? `下一步：${after.title}（${after.key}）→ 调 modeling_next` : '全部步骤已结束 → 调 modeling_status 汇报。'}`,
@@ -426,7 +430,7 @@ export function apply(ctx, config = {}) {
       }
 
       const current = nextPendingStep(state);
-      if (step !== current) {
+      if (step !== current && !(recheckDocx && !current)) {
         throw new Error(`不能越过前序步骤验收 ${step.key}；当前步骤是 ${current?.key ?? '无'}，请先完成当前步骤`);
       }
       if (isFastReview(state, step)) {
@@ -439,7 +443,7 @@ export function apply(ctx, config = {}) {
           next: after ? { step: after.key, title: after.title, promptPath: after.promptPath } : null,
         };
       }
-      if (!['running', 'blocked', 'waiting'].includes(step.status)) {
+      if (!recheckDocx && !['running', 'blocked', 'waiting'].includes(step.status)) {
         throw new Error(`步骤 ${step.key} 尚未派发；请先调 modeling_next 获取本步规格并执行，再验收`);
       }
 
@@ -461,7 +465,7 @@ export function apply(ctx, config = {}) {
         };
       }
 
-      const report = await runGates(workspace, step);
+      const report = await runGates(workspace, step, exec.signal);
       step.lastGate = { at: new Date().toISOString(), ok: report.ok, results: report.results };
       let next = null;
 
@@ -472,6 +476,7 @@ export function apply(ctx, config = {}) {
         if (after) next = { step: after.key, title: after.title, promptPath: after.promptPath };
       } else {
         step.status = 'blocked';
+        step.finishedAt = null;
       }
 
       state.updatedAt = new Date().toISOString();
@@ -652,9 +657,22 @@ export function apply(ctx, config = {}) {
       }
 
       let paper = '—';
-      const pdf = path.join(workspace, 'paper', 'main.pdf');
-      const pdfInfo = await stat(pdf).catch(() => null);
-      if (pdfInfo?.isFile()) paper = `paper/main.pdf（${pdfInfo.size} B）`;
+      const word = state.switches.output_format === 'docx';
+      const paperRel = word ? 'paper/main.docx' : 'paper/main.pdf';
+      const paperPath = path.join(workspace, paperRel);
+      const paperInfo = await stat(paperPath).catch(() => null);
+      let finalPaper = null;
+      if (word) {
+        const exportStep = state.steps.find((s) => s.key === 'docx-export');
+        if (exportStep?.status === 'completed') {
+          const verified = await runGates(workspace, exportStep, exec.signal);
+          if (verified.ok) finalPaper = paperPath;
+          else paper = `Word 产物待重新验收：${verified.hints[0] ?? '检查导出报告'}`;
+        } else if (paperInfo?.isFile()) {
+          paper = 'Word 已生成，尚未验收';
+        }
+      } else if (paperInfo?.isFile()) finalPaper = paperPath;
+      if (finalPaper) paper = `${paperRel}（${paperInfo.size} B）`;
 
       const pendingLines = openQuestions(state).map(
         (q) => `- [${q.id}]（${q.step}）${q.question}${q.options.length ? `（可选：${q.options.join(' / ')}）` : ''}`,
@@ -670,7 +688,7 @@ export function apply(ctx, config = {}) {
         `最终论文：${paper}`,
       ].join('\n');
 
-      return { report, progress: { done, total }, workspace, questions: openQuestions(state).map((q) => ({ id: q.id, step: q.step, question: q.question, options: q.options })) };
+      return { report, progress: { done, total }, workspace, finalPaper, outputFormat: word ? 'docx' : 'pdf', questions: openQuestions(state).map((q) => ({ id: q.id, step: q.step, question: q.question, options: q.options })) };
     },
   });
 
@@ -679,7 +697,7 @@ export function apply(ctx, config = {}) {
   register({
     name: 'modeling_switches',
     description:
-      '在流程开始前调整开关（竞赛/题号/页数/图表风格与引擎/丰满模式/审查模式/AI声明/对抗复核）。会重新解析步骤并重写 CLAUDE.md 与 .env_skill；已有步骤完成后再改会被拒绝。',
+      '在流程开始前调整开关（竞赛/题号/页数/输出格式/图表风格与引擎/丰满模式/审查模式/AI声明/对抗复核）。会重新解析步骤并重写 CLAUDE.md 与 .env_skill；已有步骤完成后再改会被拒绝。',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -708,7 +726,8 @@ export function apply(ctx, config = {}) {
 
       const steps = resolveSteps(switches);
       // 语言/赛项变了：模板包要跟着换（否则 en→zh 时 _templates 里没有 cumcm 等中文模板）
-      if (state.switches.language !== switches.language || state.switches.competition !== switches.competition) {
+      if (state.switches.language !== switches.language || state.switches.competition !== switches.competition
+        || state.switches.output_format !== switches.output_format) {
         await syncTemplates({ workspaceDir: workspace, assetsDir: ASSETS_DIR, switches });
       }
       if (Object.hasOwn(args.switches ?? {}, 'title')) {

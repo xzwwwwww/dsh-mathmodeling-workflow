@@ -9,6 +9,10 @@
 赛题目录/ ──► 8 步流水线 ──► paper/main.pdf + 全部源码/图表/中间产物
 ```
 
+## v0.6.0 支持 Word 论文
+
+选择 `output_format: "docx"`，工作流会先写作及验收 Markdown，再导出可编辑的 Word 论文。中文和英文赛事都能选用。严格模式在写作阶段核对源稿数字与结果，导出验收校对当前稿件、图片与 Word 产物。[Word 使用说明](docs/docx-workflow.md)
+
 ## v0.5.4 绘图 API 与运行时同步
 
 补齐新提示词要求的最终版面、矢量热力图、动态范围、不确定性带与共享图例 API。新建及旧工作区派发前都会检查运行时，按指纹升级原版副本并保留用户定制；样板不再用旧工具覆盖新版。[修复范围、升级行为与实绘验证](docs/plot-runtime-v0.5.4.md)。
@@ -104,7 +108,7 @@ pnpm install --prod
 
 agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国赛A-<时间戳>/`。
 
-### 4. 开关一览（22 个）
+### 4. 开关一览（23 个）
 
 | 开关 | 取值 | 默认 | 用途 |
 |---|---|---|---|
@@ -112,6 +116,7 @@ agent 收到后会回显最终开关，然后生成工作区 `modeling-2026国�
 | `problem_id` | A/B/C… | 空 | 题号，写进参数和规则段 |
 | `title` | 任意字符串 | 空（取目录名） | 论文标题 / 赛题简称 |
 | `language` | `zh` / `en` | 按赛项自动（中文赛项 zh，MCM/ICM/APMCM 英文 en） | 论文语言：决定用中文还是英文论文/编译技能、图表标签语言、正文页数估算口径（中文 900 字/页，英文 2200 字符/页） |
+| `output_format` | `pdf` / `docx` | `pdf` | 最终交付格式。选择 `docx` 时用 Markdown 写作并导出 Word。 |
 | `max_pages` | 正整数 | 赛项默认（多数 30，`apmcm_zh` 25，英文赛事 20） | **正文页数目标（下限）**：目录之后→参考文献之前（无目录则摘要之后→参考文献之前），不含摘要/目录/参考文献/附录/AI 声明；不是全文上限 |
 | `figure_style` | `default` / `nature` | `default` | 数据图风格：default=按工作区随机配色（去指纹）；nature=Nature 排版+深蓝主色 |
 | `flowchart_engine` | `drawio` / `html` | `drawio` | 流程图引擎：drawio 产物可拖拽编辑；html 布局更好、不可拖拽 |
@@ -152,7 +157,7 @@ agent 会回显类似：
 - **每步一个子代理、串行执行**：上一步闸门通过才进下一步，主会话只做调度和验收。
 - **需要你拍板时会来问你**：子代理拿不准关键信息（题号口径、数据取舍、硬性要求）会先问你，拿到回答再继续；能靠合理假设推进的，它会在产物里写明假设。
 - **随时可以问进度**：`看下当前进度` → 会列出 8 步状态、产物大小和待答问题。
-- **产物**：工作区根目录有 `PROBLEM_ANALYSIS.md`、`MODELING_REPORT.md`、`RESULTS.md`、`code/`、`figures/`、`paper/main.pdf`。
+- **产物**：工作区根目录有 `PROBLEM_ANALYSIS.md`、`MODELING_REPORT.md`、`RESULTS.md`、`code/`、`figures/`，以及所选格式的 `paper/main.pdf` 或 `paper/main.docx`。
 
 ## 整个流程
 

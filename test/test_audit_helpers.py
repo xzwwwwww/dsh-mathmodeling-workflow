@@ -244,6 +244,25 @@ There are 3 models and 5 figures. In 2025 we chose the model.
             self.assertNotIn("DATA_CHECK_PASSED", main.read_text(encoding="utf-8"))
             self.assertEqual(certificate(workspace)["status"], "unavailable")
 
+    def test_docx_checks_summary_and_table_but_not_numbered_references_or_stale_tex(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            source = ("# Trial\n\n## Abstract\n\nThe cost is 12.5.\n\n## Results\n\n"
+                      "| Cost | Value |\n| --- | --- |\n| cost | 12.5 |\n\n"
+                      "![Comparison](../figures/plot-98765.png)\n\n"
+                      "## 3. References\n\nReference cost 99999.\n\n"
+                      "## Appendix\n\n~~~python\nprint(123456)\n~~~\n")
+            put(workspace, "paper/main.md", source)
+            put(workspace, "paper/main.tex", r"\input{absent}")
+            put(workspace, "results.json", '{"cost":12.5}')
+            completed = run_paper(workspace, "docx")
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertNotIn("paper/main.tex", [p["path"] for p in certificate(workspace)["inputs"]])
+            put(workspace, "paper/main.md", source.replace("The cost is 12.5", "The cost is 99999"))
+            self.assertEqual(run_paper(workspace, "docx").returncode, 1)
+            put(workspace, "paper/main.md", source.replace("| cost | 12.5 |", "| cost | 99999 |"))
+            self.assertEqual(run_paper(workspace, "docx").returncode, 1)
+
     def test_snapshot_contract_hashes_all_and_only_candidate_raw_bytes_after_stamp(self):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)

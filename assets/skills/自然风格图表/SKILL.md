@@ -644,5 +644,5 @@ The merger reads all upstream manifests in stage order and preserves their union
 
 Perform GPTIMG_MANIFEST reconciliation when the merged manifest contains GPTIMG items. Nature Figure must make one real _utils/gpt_image.py call per item before any fallback. Persist failed basenames in figures/_gptimg_failed.txt and writeALL_SUCCESS, SOME_FAILED, or ALL_FAILED to figures/_gptimg_status.txt; the downstream DrawIO/TikZ stage uses that evidence for fallback. A missing attempt is never a valid fallback condition.
 
-Perform TABLE_MANIFEST reconciliation when the merged manifest contains TABLE_* items. Generate every figures/TABLE_*.tex from real source values, store unrounded values in figures/table_source_data.
+Perform TABLE_MANIFEST reconciliation when the merged manifest contains TABLE_* items. In PDF mode generate `figures/TABLE_*.tex`; in Word mode (`output_format: docx` in CLAUDE.md) generate `figures/TABLE_*.md` as pipe tables with the same identifiers. Keep `figures/latex_includes.tex` as an upstream figure index in both modes. Store unrounded values in `figures/table_source_data`.
 json, and run_utils/table_data_check.py --figures figures. Missing planned .tex files are a hard completion failure. Nature data-figure style rules do not exempt GPT Image or TABLE items from the shared manifest contract.

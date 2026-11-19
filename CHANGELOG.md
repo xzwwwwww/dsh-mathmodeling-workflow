@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- 增加 `output_format: docx` 开关，支持中英文 Markdown 论文写作及 Word 导出。
+- 在 Markdown 写作完成时检查正文、图表、逐问覆盖、AI 声明与严格数字核对。Word 导出后验证文档结构、源稿与图片哈希，并为有硬上限的赛项检查实际页数。
+- 增加完整 Word 流程的自动化回归。参见 [Word 使用说明](docs/docx-workflow.md)。
+
 ## 0.5.4
 
 - 补齐提示词已经要求、旧 plot_utils 却缺失的完整共享 API：set_paper_placement、dynamic_limits、draw_vector_heatmap、declutter_axes、uncertainty_band、shared_legend、consolidate_shared_legends；auto_legend 支持测量后的图内/图外布局。

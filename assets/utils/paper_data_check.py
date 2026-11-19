@@ -328,6 +328,19 @@ def _math_data(match):
 def strip_non_data(text: str, mode: str) -> str:
     if mode == "pdf":
         text = _tex_clean(text)
+    if mode == "docx":
+        # Markdown headings delimit the appendix/refs. Preserve the abstract for result verification.
+        text = re.sub(r"(?ms)^ {0,3}(?P<fence>`{3,}|~{3,})[^\n]*\n.*?(?:^ {0,3}(?P=fence)[`~]*[ \t]*$|\Z)", " ", text)
+        text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+        end_heading = (r"(?im)^ {0,3}##[ \t]+"
+                       r"(?:(?:\d+(?:[.．]\d+)*|[一二三四五六七八九十]+)[ \t.．、：:]+)*"
+                       r"(?:参考文献|参考资料|附录|致谢|References?\b|Bibliography\b|Works Cited\b|"
+                       r"Appendix\b|Appendices\b|Acknowledg(?:e)?ments?\b|"
+                       r"AI\s*(?:工具使用声明|(?:Tools?\s+)?Usage\s+(?:Statement|Disclosure)))")
+        text = re.split(end_heading, text, maxsplit=1)[0]
+        # Keep visible link labels/captions, exclude URLs and file/attribute syntax.
+        text = re.sub(r"(!?\[[^\n]*?\])\((?:\\.|[^\n)])*\)(?:\{[^\n}]*\})?", r"\1", text)
+        text = re.sub(r"(?m)^ {0,3}\[[^\n]*?\]:[^\n]*$", " ", text)
     text = _body_prefix(_without_code(text))
     text = re.sub(r"(?s)\\begin\{(?:equation|align|eqnarray|gather)\*?\}(.*?)\\end\{(?:equation|align|eqnarray|gather)\*?\}", _math_data, text)
     for pattern in (r"(?s)\$\$(.*?)\$\$", r"(?s)(?<!\\)\$(.*?)(?<!\\)\$",
@@ -554,7 +567,7 @@ def stamp_pass(workspace: Path, mode: str) -> None:
     target.write_text(text.rstrip() + "\n\n" + marker + "\n", encoding="utf-8")
 
 
-def input_snapshot(workspace: Path):
+def input_snapshot(workspace: Path, mode="pdf"):
     """Contract shared with the JS gate: all candidate inputs, including unreferenced drafts.
 
     The *check* follows the actual input graph; its evidence expires on any candidate input change.
@@ -564,14 +577,16 @@ def input_snapshot(workspace: Path):
     paper, figures = workspace / "paper", workspace / "figures"
     if paper.is_dir():
         paths.update(p for p in paper.rglob("*") if p.is_file() and not p.is_symlink()
-                     and (p.suffix == ".tex" or p.relative_to(workspace).as_posix() == "paper/main.md"))
+                     and ((mode != "docx" and p.suffix == ".tex")
+                          or p.relative_to(workspace).as_posix() == "paper/main.md"))
     if figures.is_dir():
         paths.update(p for p in figures.rglob("*") if p.is_file() and not p.is_symlink()
                      and p.suffix in {".json", ".tex", ".md"}
                      and not p.name.startswith("TABLE_DATA_CHECK_"))
     paths.update(workspace / name for name in ("results.json", "all_results.json")
                  if (workspace / name).is_file())
-    paths.update(tex_input_paths(workspace))
+    if mode != "docx":
+        paths.update(tex_input_paths(workspace))
     return [{"path": p.relative_to(workspace).as_posix(),
              "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
             for p in sorted(paths, key=lambda p: p.relative_to(workspace).as_posix().encode("utf-16-be", "surrogatepass"))]
@@ -589,7 +604,7 @@ def revoke_pass(workspace, mode):
     for name in (CHECKLIST_NAME, REPORT_NAME):
         (workspace / name).unlink(missing_ok=True)
     paper = workspace / "paper"
-    targets = list(paper.rglob("*.tex")) if paper.is_dir() else []
+    targets = list(paper.rglob("*.tex")) if mode != "docx" and paper.is_dir() else []
     if (paper / "main.md").is_file():
         targets.append(paper / "main.md")
     for path in targets:
@@ -658,7 +673,7 @@ def main() -> int:
         if passed:
             stamp_pass(workspace, mode)
         # Stamping main mutates an input, so take the final snapshot afterwards.
-        write_result(workspace, mode, "passed" if passed else "failed", inputs=input_snapshot(workspace),
+        write_result(workspace, mode, "passed" if passed else "failed", inputs=input_snapshot(workspace, mode),
                      checked_values=numbers, unmatched=len(pending), json_sources=len(json_files))
     except (OSError, UnicodeError, ValueError, RecursionError, OverflowError) as exc:
         # Parsing/read failures must never leave an earlier success observable to a gate.
